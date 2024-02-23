@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "postgres-etl-components"
+version = "0.1.0"
+description = "Components to build ETL pipelines using pandas and psycopg"
+authors = ["Luc Heuff <10941592+LucHeuff@users.noreply.github.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+psycopg = "^3.1.18"
+pandas = "^2.2.0"
+
+
+[tool.poetry.group.dev.dependencies]
+ipython = "^8.22.1"
+ruff = "^0.2.2"
+neovim = "^0.3.1"
+pytest = "^8.0.1"
+hypothesis = "^6.98.10"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
