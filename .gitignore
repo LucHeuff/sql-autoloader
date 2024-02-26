@@ -1,4 +1,5 @@
 # Python things
 __pycache__
+.hypothesis
 dev.py
 
