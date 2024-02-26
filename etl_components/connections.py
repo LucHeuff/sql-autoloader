@@ -8,6 +8,9 @@ from psycopg.rows import dict_row
 
 config = dotenv_values(".env")
 
+SQLITE_VALUES_PATTERN = r":(\w+)"
+POSTGRES_VALUES_PATTERN = r"\((\w+)\)s"
+
 
 class RollbackCausedError(Exception):
     """Exception raised when the PostgresCursor catches and runs a rollback."""
@@ -28,8 +31,8 @@ def _dict_row(cursor: sqlite3.Cursor, row: tuple[Any, ...]) -> dict:
         data in dictionary format.
 
     """
-    row = sqlite3.Row(cursor, row)
-    return dict(zip(row.keys(), tuple(row)))
+    r = sqlite3.Row(cursor, row)
+    return dict(zip(r.keys(), tuple(r)))
 
 
 class SQLiteCursor:
@@ -38,6 +41,12 @@ class SQLiteCursor:
     Assumes the following variables are set in .env:
         SQLITE_DB: filename to sqlite DB. If not available, defaults to in memory db.
     """
+
+    insert_format = """
+        INSERT INTO <table> (column1, column2, ...)
+        VALUES (:column1_source), :column2_source, ...)
+    """
+    values_pattern = SQLITE_VALUES_PATTERN
 
     def __init__(self, db: Union[str, None] = None) -> None:
         """Create a connection to SQLite database.
@@ -100,6 +109,12 @@ class PostgresCursor:
         connection: connection with the server, using dict_row row factory.
 
     """
+
+    insert_format = """
+        INSERT INTO <table> (column1, column2, ...)
+        VALUES (%(column1_source)s, %(column2_source)s, ...)
+    """
+    values_pattern = POSTGRES_VALUES_PATTERN
 
     def __init__(self) -> None:
         """Create a connection with the PostgreSQL server."""
