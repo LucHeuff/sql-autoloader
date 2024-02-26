@@ -1,6 +1,6 @@
 import sqlite3
 from types import TracebackType
-from typing import Union
+from typing import Any, Union
 
 import psycopg
 from dotenv import dotenv_values
@@ -13,6 +13,23 @@ class RollbackCausedError(Exception):
     """Exception raised when the PostgresCursor catches and runs a rollback."""
 
     pass
+
+
+def _dict_row(cursor: sqlite3.Cursor, row: tuple[Any, ...]) -> dict:
+    """Row Factory that converts SQLite output into dictionaries.
+
+    Args:
+    ----
+        cursor: SQLite cursor
+        row: data row output
+
+    Returns:
+    -------
+        data in dictionary format.
+
+    """
+    row = sqlite3.Row(cursor, row)
+    return dict(zip(row.keys(), tuple(row)))
 
 
 class SQLiteCursor:
@@ -32,13 +49,7 @@ class SQLiteCursor:
         """
         db = ":memory:" if db is None else db
         self.connection = sqlite3.connect(db)
-        self.connection.row_factory = self._dict_row
-        # self.connection.row_factory = sqlite3.Row
-
-    def _dict_row(self, cursor, row):
-        row = sqlite3.Row(cursor, row)
-        return dict(zip(row.keys(), tuple(row)))
-        # return {key: value for (key, value) in zip(row.keys, tuple(row))}
+        self.connection.row_factory = _dict_row
 
     def __enter__(self) -> sqlite3.Cursor:
         """Enter by creating a cursor to interact with the SQLite database.
