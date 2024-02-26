@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "postgres-etl-components"
+name = "etl-components"
 version = "0.1.0"
-description = "Components to build ETL pipelines using pandas and psycopg"
+description = "Components to build ETL pipelines using pandas and psycopg or sqlite"
 authors = ["Luc Heuff <10941592+LucHeuff@users.noreply.github.com>"]
 readme = "README.md"
 
