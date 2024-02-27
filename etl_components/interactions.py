@@ -215,7 +215,6 @@ def parse_insert_query(
     return ParsedInsertComponents(table, columns, values)
 
 
-# TODO functies om retrieve te parsen
 def check_retrieve_query(query: str, correct_format: str) -> None:
     """Check if retrieve query conforms to format.
 

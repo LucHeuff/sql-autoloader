@@ -738,7 +738,6 @@ def test_get_columns_from_retrieve_raises(
         get_columns_from_retrieve(wrong_query, TEST_FORMAT)
 
 
-# TODO test parse_retrieve_query and raises
 @given(components=parse_retrieve_strategy())
 def test_parse_retrieve_query(components: ParseRetrieveQueryComponents) -> None:
     """Test whether parse_retrieve_query() correctly retrieves table and columns.
