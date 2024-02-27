@@ -120,7 +120,7 @@ def gap_generator(draw: DrawFn) -> str:
 class GeneratedCursor:
     """Encapsulates cursor_generator() output."""
 
-    cursor: Cursor
+    cursor: PostgresCursor | SQLiteCursor
     pattern_function: pattern_fn
 
 
