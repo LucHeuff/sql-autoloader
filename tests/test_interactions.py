@@ -16,14 +16,19 @@ from etl_components.connections import (
     SQLiteCursor,
 )
 from etl_components.interactions import (
-    Cursor,
     InvalidInsertQueryError,
-    ParsedQueryComponents,
+    InvalidRetrieveQueryError,
+    ParsedInsertComponents,
+    ParsedRetrieveComponents,
     check_insert_query,
+    check_retrieve_query,
     get_columns_from_insert,
+    get_columns_from_retrieve,
     get_table_from_insert,
+    get_table_from_retrieve,
     get_values_from_insert,
     parse_insert_query,
+    parse_retrieve_query,
 )
 
 # Nomenclature
@@ -32,35 +37,7 @@ from etl_components.interactions import (
 
 pattern_fn = Callable[[str], str]
 
-
-def postgres_value_pattern(column: str) -> str:
-    """Convert column to PostgreSQL value format.
-
-    Args:
-    ----
-        column: column name.
-
-    Returns:
-    -------
-       column name in PostgreSQL format.
-
-    """
-    return f"%({column})s"
-
-
-def sqlite_value_pattern(column: str) -> str:
-    """Convert column to SQLite value format.
-
-    Args:
-    ----
-        column: column name.
-
-    Returns:
-    -------
-       column name in SQLite format.
-
-    """
-    return f":{column}"
+# ---- Generators
 
 
 @composite
@@ -116,6 +93,36 @@ def gap_generator(draw: DrawFn) -> str:
     return draw(st.text(string.whitespace, min_size=1, max_size=3))
 
 
+def postgres_value_pattern(column: str) -> str:
+    """Convert column to PostgreSQL value format.
+
+    Args:
+    ----
+        column: column name.
+
+    Returns:
+    -------
+       column name in PostgreSQL format.
+
+    """
+    return f"%({column})s"
+
+
+def sqlite_value_pattern(column: str) -> str:
+    """Convert column to SQLite value format.
+
+    Args:
+    ----
+        column: column name.
+
+    Returns:
+    -------
+       column name in SQLite format.
+
+    """
+    return f":{column}"
+
+
 @dataclass
 class GeneratedCursor:
     """Encapsulates cursor_generator() output."""
@@ -124,8 +131,8 @@ class GeneratedCursor:
     pattern_function: pattern_fn
 
 
-POSTGRES_CURSOR_PAIR = GeneratedCursor(PostgresCursor, postgres_value_pattern)
-SQLITE_CURSOR_PAIR = GeneratedCursor(SQLiteCursor, sqlite_value_pattern)
+POSTGRES_CURSOR_PAIR = GeneratedCursor(PostgresCursor, postgres_value_pattern)  # type: ignore
+SQLITE_CURSOR_PAIR = GeneratedCursor(SQLiteCursor, sqlite_value_pattern)  # type: ignore
 
 
 @composite
@@ -178,6 +185,31 @@ def insert_query_generator(
     column_names = ", ".join(columns)
     value_names = ", ".join(values_pattern_function(val) for val in values)
     return f"{w[0]}INSERT INTO{w[1]}{table}{w[2]}({column_names}){w[3]}VALUES{w[4]}({value_names}){w[5]}{end_noise}"
+
+
+@composite
+def retrieve_query_generator(
+    draw: DrawFn, table: str, columns: list[str]
+) -> str:
+    """Generate a valid retrieve query.
+
+    Args:
+    ----
+        draw: hypothesis draw function
+        table: table name
+        columns: column names (optionally with aliases)
+
+    Returns:
+    -------
+        retrieve query as string
+
+    """
+    w = draw(st.lists(gap_generator(), min_size=5, max_size=5))
+    column_names = ", ".join(columns)
+    return f"{w[0]}SELECT{w[1]}id as {table}_id, {column_names}{w[2]}FROM{w[3]}{table}"
+
+
+# ---- Strategies
 
 
 @dataclass
@@ -250,27 +282,11 @@ def invalid_insert_query_strategy(draw: DrawFn) -> list[str]:
     """
     random_text = draw(st.text(min_size=2, max_size=10))
 
-    table = draw(table_name_generator())
-    num_columns = draw(st.integers(min_value=1, max_value=5))
-    columns = draw(
-        st.lists(
-            column_name_generator(), min_size=num_columns, max_size=num_columns
-        )
-    )
-    values = draw(
-        st.lists(
-            column_name_generator(), min_size=num_columns, max_size=num_columns
-        )
-    )
-    pattern_function = draw(cursor_generator()).pattern_function
+    valid_insert = draw(insert_query_strategy())
 
-    valid_query = draw(
-        insert_query_generator(table, columns, values, pattern_function)
-    )
-
-    no_table_query = valid_query.replace(table, "")
-    no_values_query = valid_query.split("VALUES")[0]
-    lowercase_query = valid_query.lower()
+    no_table_query = valid_insert.query.replace(valid_insert.table, "")
+    no_values_query = valid_insert.query.split("VALUES")[0]
+    lowercase_query = valid_insert.query.lower()
 
     return [
         random_text,
@@ -284,7 +300,7 @@ def invalid_insert_query_strategy(draw: DrawFn) -> list[str]:
 class ParseInsertQueryComponents:
     """Encapsulates parse_insert_strategy() outputs."""
 
-    cursor: Cursor
+    cursor: PostgresCursor | SQLiteCursor
     query: str
     table: str
     columns: list[str]
@@ -317,6 +333,123 @@ def parse_insert_strategy(draw: DrawFn) -> ParseInsertQueryComponents:
     )
 
 
+# ---- Retrieve query strategies
+
+
+@dataclass
+class RetrieveQueryComponents:
+    """Encapsulates output from retrieve_query_strategy()."""
+
+    query: str
+    table: str
+    columns: list[str]
+
+
+@composite
+def retrieve_query_strategy(draw: DrawFn) -> RetrieveQueryComponents:
+    """Generate a random valid retrieve query.
+
+    Args:
+    ----
+        draw: hypothesis draw function
+
+    Returns:
+    -------
+        RetrieveQueryComponents
+
+    """
+    table = draw(table_name_generator())
+    num_columns = draw(st.integers(min_value=1, max_value=5))
+    # generate whether each column has an alias
+    has_alias = draw(
+        st.lists(st.booleans(), min_size=num_columns, max_size=num_columns)
+    )
+    # generating columns and aliases
+    columns = draw(
+        st.lists(
+            column_name_generator(),
+            min_size=num_columns,
+            max_size=num_columns,
+            unique=True,
+        )
+    )
+    aliases = draw(
+        st.lists(
+            column_name_generator(),
+            min_size=num_columns,
+            max_size=num_columns,
+            unique=True,
+        )
+    )
+    # weaving aliases into SQL string
+    columns_with_aliases = [
+        f"{col} as {al}" if has else col
+        for (col, al, has) in zip(columns, aliases, has_alias)
+    ]
+    # weaving out which name is at the end
+    effective_columns = [
+        al if has else col
+        for (col, al, has) in zip(columns, aliases, has_alias)
+    ]
+    query = draw(retrieve_query_generator(table, columns_with_aliases))
+    return RetrieveQueryComponents(query, table, effective_columns)
+
+
+@composite
+def invalid_retrieve_query_strategy(draw: DrawFn) -> list[str]:
+    """Generate random invalid retrieve query.
+
+    Args:
+    ----
+        draw: hypothesis draw function
+
+    Returns:
+    -------
+       list of invalid retrieve queries
+
+    """
+    random_text = draw(st.text(min_size=2, max_size=10))
+    valid_retrieve = draw(retrieve_query_strategy())
+
+    no_table_query = valid_retrieve.query.replace(valid_retrieve.table, "")
+    no_id_query = valid_retrieve.query.replace("id as", "")
+    lowercase_query = valid_retrieve.query.lower()
+
+    return [random_text, no_table_query, no_id_query, lowercase_query]
+
+
+@dataclass
+class ParseRetrieveQueryComponents:
+    """Encapsulates parse_retrieve_strategy() outputs."""
+
+    cursor: PostgresCursor | SQLiteCursor
+    query: str
+    table: str
+    columns: list[str]
+    data: pd.DataFrame
+
+
+@composite
+def parse_retrieve_strategy(draw: DrawFn) -> ParseRetrieveQueryComponents:
+    """Generate examples for parse_retrieve_query().
+
+    Args:
+    ----
+        draw: hypothesis draw function.
+
+    Returns:
+    -------
+       ParseRetrieveQueryComponents
+
+    """
+    generated_cursor = draw(cursor_generator())
+    query_components = draw(retrieve_query_strategy())
+    data = pd.DataFrame({col: [1, 2, 3] for col in query_components.columns})
+    return ParseRetrieveQueryComponents(
+        generated_cursor.cursor, **query_components.__dict__, data=data
+    )
+
+
 # ---- Testing insert query parsing
 TEST_FORMAT = "TEST"
 
@@ -335,7 +468,7 @@ def test_check_insert_query(components: InsertQueryComponents) -> None:
 
 @given(queries=invalid_insert_query_strategy())
 def test_check_insert_query_raises(queries: list[str]) -> None:
-    """Test whether invalid input queries correctly raise exceptions.
+    """Test whether invalid insert queries correctly raise exceptions.
 
     Args:
     ----
@@ -476,11 +609,15 @@ def test_parse_insert_query(components: ParseInsertQueryComponents) -> None:
         components: ParseInsertQueryComponents
 
     """
-    out = ParsedQueryComponents(
+    out = ParsedInsertComponents(
         components.table, components.columns, components.values
     )
     assert (
-        parse_insert_query(components.cursor, components.query, components.data)
+        parse_insert_query(
+            components.cursor,  # type: ignore
+            components.query,
+            components.data,
+        )
         == out
     )
 
@@ -499,4 +636,141 @@ def test_parse_insert_query_raises(
     data = components.data
     data.columns = [f"{col}_" for col in data.columns]
     with pytest.raises(InvalidInsertQueryError):
-        parse_insert_query(components.cursor, components.query, data)
+        parse_insert_query(components.cursor, components.query, data)  # type: ignore
+
+
+# ---- Testing retrieve query parsing
+
+
+@given(components=retrieve_query_strategy())
+def test_check_retrieve_query(components: RetrieveQueryComponents) -> None:
+    """Test whether valid retrieve queries correctly pass.
+
+    Args:
+    ----
+        components: RetrieveQueryComponents
+
+    """
+    assert (
+        check_retrieve_query(components.query, correct_format=TEST_FORMAT)
+        is None
+    )
+
+
+@given(queries=invalid_retrieve_query_strategy())
+def test_check_retrieve_query_raises(queries: list[str]) -> None:
+    """Test whether invalid retrieve queries correctly raise exceptions.
+
+    Args:
+    ----
+        queries: list of invalid queries
+
+    """
+    for query in queries:
+        with pytest.raises(InvalidRetrieveQueryError):
+            check_retrieve_query(query, TEST_FORMAT)
+
+
+@given(components=retrieve_query_strategy())
+def test_get_table_from_retrieve(components: RetrieveQueryComponents) -> None:
+    """Test whether get_table_from_retrieve() correctly retrieves table.
+
+    Args:
+    ----
+        components: RetrieveQueryComponents
+
+    """
+    assert (
+        get_table_from_retrieve(components.query, TEST_FORMAT)
+        == components.table
+    )
+
+
+@given(components=retrieve_query_strategy())
+def test_get_table_from_retrieve_raises(
+    components: RetrieveQueryComponents,
+) -> None:
+    """Test whether get_table_from_retrieve() raises an exception when table cannot be found.
+
+    Args:
+    ----
+        components: RetrieveQueryComponents
+
+    """
+    wrong_query = re.sub(
+        rf"FROM\s*{components.table}", "FROM ", components.query
+    )
+    with pytest.raises(InvalidRetrieveQueryError):
+        get_table_from_retrieve(wrong_query, TEST_FORMAT)
+
+
+@given(components=retrieve_query_strategy())
+def test_get_columns_from_retrieve(components: RetrieveQueryComponents) -> None:
+    """Test whether get_columns_from_retrieve() correctly retrieves columns.
+
+    Args:
+    ----
+        components: RetrieveQueryComponents
+
+    """
+    assert (
+        get_columns_from_retrieve(components.query, TEST_FORMAT)
+        == components.columns
+    )
+
+
+@given(components=retrieve_query_strategy())
+def test_get_columns_from_retrieve_raises(
+    components: RetrieveQueryComponents,
+) -> None:
+    """Test whether get_columns_from_retrieve() correctly raises an exception when columns are missing.
+
+    Args:
+    ----
+        components: RetrieveQueryComponents
+
+    """
+    # columns entered wrong
+    wrong_query = re.sub(
+        r"\s*SELECT\s*.*\s*FROM", "SELECT FROM", components.query
+    )
+    with pytest.raises(InvalidRetrieveQueryError):
+        get_columns_from_retrieve(wrong_query, TEST_FORMAT)
+
+
+# TODO test parse_retrieve_query and raises
+@given(components=parse_retrieve_strategy())
+def test_parse_retrieve_query(components: ParseRetrieveQueryComponents) -> None:
+    """Test whether parse_retrieve_query() correctly retrieves table and columns.
+
+    Args:
+    ----
+        components: ParseRetrieveQueryComponents
+
+    """
+    out = ParsedRetrieveComponents(components.table, components.columns)
+    assert (
+        parse_retrieve_query(
+            components.cursor,  # type: ignore
+            components.query,
+            components.data,
+        )
+        == out
+    )
+
+
+@given(components=parse_retrieve_strategy())
+def test_parse_retrieve_query_raises(
+    components: ParseRetrieveQueryComponents,
+) -> None:
+    """Test whether parse_retrieve_query() correctly raises an exception when columns don't appear in data.
+
+    Args:
+    ----
+        components: ParseRetrieveQueryComponents
+
+    """
+    data = components.data
+    data.columns = [f"{col}_" for col in data.columns]
+    with pytest.raises(InvalidRetrieveQueryError):
+        parse_retrieve_query(components.cursor, components.query, data)  # type: ignore

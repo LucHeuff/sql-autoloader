@@ -10,6 +10,7 @@ class Cursor(Protocol):
 
     insert_format: str
     values_pattern: str
+    retrieve_format: str
 
     def execute(self, query: str, data: dict | None = None) -> None:
         """Execute query.
@@ -127,7 +128,7 @@ def get_columns_from_insert(query: str, correct_format: str) -> list[str]:
 
     """
     message = f"Invalid insert query, could not find columns. Correct format is:\n{correct_format}"
-    section_pattern = r"\s*INSERT INTO\s*\w+\s*\((.*)\)\s*VALUES"
+    section_pattern = r"^\s*INSERT INTO\s*\w+\s*\((.*)\)\s*VALUES"
     columns_section = re.match(section_pattern, query)
     if columns_section is None:
         raise InvalidInsertQueryError(message)
@@ -149,6 +150,10 @@ def get_values_from_insert(
         pattern: pattern with which to extract values.
         correct_format: what the correct format should be.
 
+    Returns:
+    -------
+        insert columns names
+
     Raises:
     ------
         InvalidInsertQueryError when no column names can be extracted.
@@ -162,7 +167,7 @@ def get_values_from_insert(
 
 
 @dataclass
-class ParsedQueryComponents:
+class ParsedInsertComponents:
     """Contains output values of parse_insert_query()."""
 
     table: str
@@ -174,8 +179,8 @@ def parse_insert_query(
     cursor: Cursor,
     query: str,
     data: pd.DataFrame,
-) -> ParsedQueryComponents:
-    """Perform linter checks on query and data and return table name, column names and value column names.
+) -> ParsedInsertComponents:
+    """Perform linter checks on insert query and data and return table name, column names and value column names.
 
     Args:
     ----
@@ -185,7 +190,7 @@ def parse_insert_query(
 
     Returns:
     -------
-        InsertQueryComponents met table, columns, values
+        ParsedInsertComponents
 
     Raises:
     ------
@@ -207,10 +212,133 @@ def parse_insert_query(
             {data.columns.tolist()}
         """
         raise InvalidInsertQueryError(message)
-    return ParsedQueryComponents(table, columns, values)
+    return ParsedInsertComponents(table, columns, values)
 
 
 # TODO functies om retrieve te parsen
+def check_retrieve_query(query: str, correct_format: str) -> None:
+    """Check if retrieve query conforms to format.
+
+    Args:
+    ----
+        query: to be checked.
+        correct_format: what the correct format should be.
+
+    Raises:
+    ------
+        InvalidRetrieveQueryError: when query does not conform to format.
+
+    """
+    pattern = r"\s*SELECT\s*id as .*\s*FROM\s*\w+$"
+    if not re.fullmatch(pattern, query):
+        message = f"Invalid retrieve query format. Correct format is:\n{correct_format}"
+        raise InvalidRetrieveQueryError(message)
+
+
+def get_table_from_retrieve(query: str, correct_format: str) -> str:
+    """Extract table name from retrieve query.
+
+    Args:
+    ----
+        query: from which table must be extracted.
+        correct_format: what the correct format should be.
+
+    Returns:
+    -------
+        table name
+
+    Raises:
+    ------
+        InvalidRetrieveQueryError: if table cannot be found.
+
+    """
+    # fancy named regex that immediately checks if table matches in id and FROM
+    pattern = r"^\s*SELECT\s*id as (?P<table>\w+)_id.*\s*FROM\s*(?P=table)\s*$"
+    result = re.match(pattern, query)
+    if result is None:
+        message = f"Invalid retrieve query, could not find <table>. Correct format is\n{correct_format}"
+        raise InvalidRetrieveQueryError(message)
+    return result.group(1)
+
+
+def get_columns_from_retrieve(query: str, correct_format: str) -> list[str]:
+    """Extract columns from retrieve query.
+
+    Args:
+    ----
+        query: from which table must be extracted.
+        correct_format: what the correct format should be.
+
+    Returns:
+    -------
+        column names
+
+    Raises:
+    ------
+        InvalidRetrieveQueryError: if no columns could be found.
+
+    """
+    message = f"Invalid retrieve query, could not find columns. Correct format is:\n{correct_format}"
+    section_pattern = r"^\s*SELECT\s*id as \w+_id, (.*)\s*FROM"
+    columns_section = re.match(section_pattern, query)
+    if columns_section is None:
+        raise InvalidRetrieveQueryError(message)
+    columns = [
+        col_parts.strip().split(" ")[-1]
+        for col_parts in columns_section.group(1).split(", ")
+    ]
+    if not columns:
+        raise InvalidRetrieveQueryError(message)
+    return columns
+
+
+@dataclass
+class ParsedRetrieveComponents:
+    """Encapsulates parse_retrieve_query() output."""
+
+    table: str
+    columns: list[str]
+
+
+def parse_retrieve_query(
+    cursor: Cursor, query: str, data: pd.DataFrame
+) -> ParsedRetrieveComponents:
+    """Perform linter checks on retrieve query and return table name and column names.
+
+    Args:
+    ----
+        cursor: Cursor that performs interactions with the database
+        query: insert query to be parsed
+        data: to be inserted into the database.
+
+    Returns:
+    -------
+        ParsedRetrieveComponents
+
+
+    Raises:
+    ------
+        InvalidRetrieveQueryError: when columns do not appear in data
+
+    """
+    correct_format = cursor.retrieve_format
+    check_retrieve_query(query, correct_format)
+    table = get_table_from_retrieve(query, correct_format)
+    columns = get_columns_from_retrieve(query, correct_format)
+
+    # excluding the first since it is the <table>_id columns that is going to be added
+    if not all(column in data.columns for column in columns):
+        message = f"""Columns in retrieve query do not match columns in data:
+        Columns are:
+            {columns}
+        but available columns in data are:
+            {data.columns.tolist()}
+
+        """
+        raise InvalidRetrieveQueryError(message)
+    return ParsedRetrieveComponents(table, columns)
+
+
 # TODO parse_insert_and_retrieve_query maken
 
 # TODO compare_query parse dingen maken
@@ -223,7 +351,7 @@ def insert(cursor: Cursor, query: str, data: pd.DataFrame) -> None:
     ----
         cursor: cursor that performs interactions with the database.
         query: insert query of the following format:
-            INSERT INTO <table> (column1, column2, ...)
+            INSERT INTO <table> (<column1>, <column2>, ...)
             VALUES (...) # depending on sqlite or psycopg connection
             ...
         data: to be inserted into the database
@@ -231,22 +359,44 @@ def insert(cursor: Cursor, query: str, data: pd.DataFrame) -> None:
     """
     columns = parse_insert_query(cursor, query, data)
 
-    data = data[columns].drop_duplicates()
+    data = data[columns].drop_duplicates()  # type: ignore
     cursor.executemany(query, data.to_dict("records"))
 
 
 def retrieve_ids(
-    cursor: Cursor, query: str, data: pd.DataFrame
+    cursor: Cursor, query: str, data: pd.DataFrame, *, replace: bool = True
 ) -> pd.DataFrame:
-    columns = parse_retrieve_query(cursor, query, data)
+    """Retrieve ids from database.
+
+    Args:
+    ----
+        cursor: cursor that performs interactoins with the database.
+        query: retrieve query of the following format:
+            SELECT id as <table>_id, <column1>, <column2> as <alias>, ... FROM <table>
+        data: to which ids are to be merged
+        replace: whether original columns without _id suffix are to be removed.
+
+    Returns:
+    -------
+        data to which the id columns are merged.
+
+
+    """
+    query_components = parse_retrieve_query(cursor, query, data)
     orig_len = len(data)
 
     cursor.execute(query)
     ids_data = pd.DataFrame(cursor.fetchall())
 
-    data = data.merge(ids_data, how="left", on=columns)
+    data = data.merge(ids_data, how="left", on=query_components.columns)
     assert not len(data) < orig_len, "Rows were lost when merging on ids."
     assert not len(data) > orig_len, "Rows were duplicated when merging on ids."
+
+    if replace:
+        non_id_columns = [
+            col for col in query_components.columns if "_id" not in col
+        ]
+        data = data.drop(columns=non_id_columns)
 
     return data
 
@@ -258,7 +408,7 @@ def insert_and_retrieve_ids(
     data: pd.DataFrame,
 ) -> pd.DataFrame:
     insert_table, insert_columns, insert_values = parse_insert_query(
-        cursor, insert_query, data, all_components=True
+        cursor, insert_query, data
     )
 
 
