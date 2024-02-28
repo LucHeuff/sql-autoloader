@@ -336,9 +336,53 @@ def parse_retrieve_query(
         """
         raise InvalidRetrieveQueryError(message)
     return ParsedRetrieveComponents(table, columns)
+def parse_insert_and_retrieve_query(
+    cursor: Cursor, insert_query: str, retrieve_query: str, data: pd.DataFrame
+) -> list[str]:
+    """Perform linter checks on insert and retrieve queries and data and check consistency.
+
+    Args:
+    ----
+        cursor: Cursor that performs interactions with the database
+        insert_query: insert query to be parsed
+        retrieve_query: retrieve query to be parsed
+        data: to be inserted into the database
+
+    Returns:
+    -------
+        column names that are inserted and retrieved
 
 
-# TODO parse_insert_and_retrieve_query maken
+    Raises:
+    ------
+        InvalidInsertAndRetrieveQueryError: if tables or columns don't match between queries
+
+    """
+    insert_columns = parse_insert_query(cursor, insert_query, data)
+    insert_table = get_table_from_insert(insert_query, cursor.insert_format)
+    retrieve_columns = parse_retrieve_query(cursor, retrieve_query, data)
+    retrieve_table = get_table_from_retrieve(
+        retrieve_query, cursor.retrieve_format
+    )
+
+    if insert_table != retrieve_table:
+        message = f"""Insert and retrieve queries don't match. 
+        The table to which is inserted should match the table from which is retrieved, but received:
+        insert table: {insert_table}, retrieve table: {retrieve_table}
+        """
+        raise InvalidInsertAndRetrieveQueryError(message)
+
+    if insert_columns != retrieve_columns:
+        message = f"""Insert and retrieve queries don't match. 
+        The columns that are inserted should match the columns that are retrieved, but received:
+        insert columns: 
+            {insert_columns}
+        retrieve columns:
+            {retrieve_columns}
+        """
+        raise InvalidInsertAndRetrieveQueryError(message)
+
+    return insert_columns
 
 # TODO compare_query parse dingen maken
 
@@ -405,10 +449,50 @@ def insert_and_retrieve_ids(
     insert_query: str,
     retrieve_query: str,
     data: pd.DataFrame,
+    *,
+    replace: bool = True,
 ) -> pd.DataFrame:
-    insert_table, insert_columns, insert_values = parse_insert_query(
-        cursor, insert_query, data
+    """Insert data into database and retrieve the newly created ids.
+
+    Args:
+    ----
+        cursor: cursor that performs interactions with the database
+        insert_query: insert query of the following format:
+            INSERT INTO <table> (<column1>, <column2>, ...)
+            VALUES (...) # depending on sqlite or psycopg connection
+            ...
+        retrieve_query: retrieve query of the followig format:
+            SELECT id as <table>_id, <column1>, <column2> as <alias>, ... FROM <table>
+        data: to be inserted from and to which ids are to be merged
+        replace: whether original columns without _id suffix are to be removed.
+
+    Returns:
+    -------
+        data to which the id columns are merged
+
+    """
+    columns = parse_insert_and_retrieve_query(
+        cursor, insert_query, retrieve_query, data
     )
+    orig_len = len(data)
+
+    # insert
+    insert_data = data[columns].drop_duplicates()  # type: ignore
+    cursor.executemany(insert_query, insert_data.to_dict("records"))  # type: ignore
+
+    # retrieve
+    cursor.execute(retrieve_query)
+    ids_data = pd.DataFrame(cursor.fetchall())
+
+    data = data.merge(ids_data, how="left", on=columns)
+    assert not len(data) < orig_len, "Rows were lost when merging on ids."
+    assert not len(data) > orig_len, "Rows were duplicated when merging on ids."
+
+    if replace:
+        non_id_columns = [col for col in columns if "_id" not in col]
+        data = data.drop(columns=non_id_columns)
+
+    return data
 
 
 def compare(cursor: Cursor, query: str, data: pd.DataFrame) -> pd.DataFrame:
