@@ -18,8 +18,6 @@ from etl_components.connections import (
 from etl_components.interactions import (
     InvalidInsertQueryError,
     InvalidRetrieveQueryError,
-    ParsedInsertComponents,
-    ParsedRetrieveComponents,
     check_insert_query,
     check_retrieve_query,
     get_columns_from_insert,
@@ -609,9 +607,7 @@ def test_parse_insert_query(components: ParseInsertQueryComponents) -> None:
         components: ParseInsertQueryComponents
 
     """
-    out = ParsedInsertComponents(
-        components.table, components.columns, components.values
-    )
+    out = components.columns
     assert (
         parse_insert_query(
             components.cursor,  # type: ignore
@@ -747,7 +743,7 @@ def test_parse_retrieve_query(components: ParseRetrieveQueryComponents) -> None:
         components: ParseRetrieveQueryComponents
 
     """
-    out = ParsedRetrieveComponents(components.table, components.columns)
+    out = components.columns
     assert (
         parse_retrieve_query(
             components.cursor,  # type: ignore
