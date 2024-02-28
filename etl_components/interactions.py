@@ -215,7 +215,7 @@ def get_table_from_retrieve(query: str, correct_format: str) -> str:
     """
     # fancy named regex that immediately checks if table matches in id and FROM
     pattern = r"^\s*SELECT\s*id as (?P<table>\w+)_id.*\s*FROM\s*(?P=table)\s*$"
-    result = re.match(pattern, query)
+    result = re.fullmatch(pattern, query)
     if result is None:
         message = f"Invalid retrieve query, could not find <table>. Correct format is\n{correct_format}"
         raise InvalidRetrieveQueryError(message)
