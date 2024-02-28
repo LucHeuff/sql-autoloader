@@ -57,6 +57,12 @@ class InvalidRetrieveQueryError(Exception):
     pass
 
 
+class InvalidInsertAndRetrieveQueryError(Exception):
+    """Exception when insert and retrieve queries don't align."""
+
+    pass
+
+
 class InvalidCompareQueryError(Exception):
     """Exception for invalid compare query."""
 
