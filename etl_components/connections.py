@@ -9,17 +9,18 @@ from psycopg.rows import dict_row
 
 config = dotenv_values(".env")
 
+
 SQLITE_INSERT_FORMAT = """
     INSERT INTO <table> (<column1>, <column2>, ...)
     VALUES (:<column1_source>, :<column2_source>, ...)
 """
-SQLITE_VALUES_PATTERN = r":(\w+)"
+SQLITE_VALUES_FORMAT = r":(\w+)"
 
 POSTGRES_INSERT_FORMAT = """
     INSERT INTO <table> (<column1>, <column2>, ...)
     VALUES (%(<column1_source>)s, %(<column2_source>)s, ...)
 """
-POSTGRES_VALUES_PATTERN = r"\((\w+)\)s"
+POSTGRES_VALUES_FORMAT = r"\((\w+)\)s"
 
 # SQLite and PostgreSQL use the same format for retrieval
 RETRIEVE_FORMAT = """
@@ -39,30 +40,39 @@ COMPARE_FORMAT = """
 
 
 @dataclass
-class CursorFormat:
+class SQLFormat:
     """Stores formats and patterns of SQL queries."""
 
     insert_format: str
-    values_pattern: str
-    retrieve_format: str
-    compare_format: str
+    values_format: str
+    retrieve_format = RETRIEVE_FORMAT
+    compare_format = COMPARE_FORMAT
 
 
-sqlite_formats = CursorFormat(
-    SQLITE_INSERT_FORMAT, SQLITE_VALUES_PATTERN, RETRIEVE_FORMAT, COMPARE_FORMAT
-)
+@dataclass
+class SQLiteFormat(SQLFormat):
+    """Format for SQLite interactions."""
 
-postgres_formats = CursorFormat(
-    POSTGRES_INSERT_FORMAT,
-    POSTGRES_VALUES_PATTERN,
-    RETRIEVE_FORMAT,
-    COMPARE_FORMAT,
-)
-
-Cursor = sqlite3.Cursor | psycopg.Cursor
+    insert_format = SQLITE_INSERT_FORMAT
+    values_format = SQLITE_VALUES_FORMAT
 
 
-def get_cursor_formats(cursor: Cursor) -> CursorFormat:
+@dataclass
+class PostgresFormat(SQLFormat):
+    """Format for Postgres interactions."""
+
+    insert_format = POSTGRES_INSERT_FORMAT
+    values_format = POSTGRES_VALUES_FORMAT
+
+
+# HACK see if I can make this better somehow, but it works for now
+format_table = {
+    "<class 'sqlite3.Cursor>'": SQLiteFormat,
+    "<class 'psycopg.Cursor>'": PostgresFormat,
+}
+
+
+def get_cursor_formats(cursor: sqlite3.Cursor | psycopg.Cursor) -> SQLFormat:
     """Get formats for this cursor.
 
     Args:
@@ -74,10 +84,7 @@ def get_cursor_formats(cursor: Cursor) -> CursorFormat:
         CursorFormat
 
     """
-    if isinstance(cursor, sqlite3.Cursor):
-        return sqlite_formats
-    if isinstance(cursor, psycopg.Cursor):
-        return postgres_formats
+    return format_table[str(type(cursor))]
 
 
 class RollbackCausedError(Exception):
