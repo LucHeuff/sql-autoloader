@@ -11,9 +11,20 @@ config = dotenv_values(".env")
 SQLITE_VALUES_PATTERN = r":(\w+)"
 POSTGRES_VALUES_PATTERN = r"\((\w+)\)s"
 # SQLite and PostgreSQL use the same format for retrieval
-RETRIEVE_FORMAT = (
-    "SELECT id as <table>_id, <column1> as <alias1>, <column2> FROM <table>"
-)
+RETRIEVE_FORMAT = """
+    SELECT id as <table>_id, <column1> as <alias1>, <column2> FROM <table>
+"""
+COMPARE_FORMAT = """
+    SELECT 
+        <table>.<column> as <alias>,
+        <table>.<column>,
+        <column>,
+        ...
+    FROM <table>
+        JOIN <other_table> ON <other_table>.<table>_id = <table>.id
+        JOIN ...
+    ...
+"""
 
 
 class RollbackCausedError(Exception):
@@ -52,6 +63,7 @@ class SQLiteCursor:
     """
     values_pattern = SQLITE_VALUES_PATTERN
     retrieve_format = RETRIEVE_FORMAT
+    compare_format = COMPARE_FORMAT
 
     def __init__(self, db: Union[str, None] = None) -> None:
         """Create a connection to SQLite database.
@@ -121,6 +133,7 @@ class PostgresCursor:
     """
     values_pattern = POSTGRES_VALUES_PATTERN
     retrieve_format = RETRIEVE_FORMAT
+    compare_format = COMPARE_FORMAT
 
     def __init__(self) -> None:
         """Create a connection with the PostgreSQL server."""

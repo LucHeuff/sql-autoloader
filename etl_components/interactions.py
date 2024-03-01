@@ -3,6 +3,8 @@ from typing import Protocol
 
 import pandas as pd
 
+# TODO fix docstrings and make them consistent
+
 
 class Cursor(Protocol):
     """Protocol for cursor used by interaction functions."""
@@ -10,6 +12,7 @@ class Cursor(Protocol):
     insert_format: str
     values_pattern: str
     retrieve_format: str
+    compare_format: str
 
     def execute(self, query: str, data: dict | None = None) -> None:
         """Execute query.
@@ -68,6 +71,12 @@ class InvalidCompareQueryError(Exception):
     pass
 
 
+class WrongDatasetPassedError(Exception):
+    """Exception for when the wrong dataset is passed into compare()."""
+
+    pass
+
+
 # ---- Functions to check insert query
 
 
@@ -77,11 +86,11 @@ def check_insert_query(query: str, correct_format: str) -> None:
     Args:
     ----
         query: to be checked.
-        correct_format: what the correct format should be.
+        correct_format: what the correct format should be
 
     Raises:
     ------
-        InvalidInsertQueryError when query does not conformt to format.
+        InvalidInsertQueryError: when query does not conformt to format
 
     """
     pattern = r"\s*INSERT INTO\s*\w+\s*\(.*\)\s*VALUES\s*\(.*\)"
@@ -255,7 +264,26 @@ def get_columns_from_retrieve(query: str, correct_format: str) -> list[str]:
 
 # ---- Functions to check compare query
 
-# TODO compare checks
+
+def check_compare_query(query: str, correct_format: str) -> None:
+    """Check if compare query conforms to format.
+
+    Args:
+    ----
+        query: to be checked.
+        correct_format: what the correct format should be
+
+    Raises:
+    ------
+        InvalidCompareQueryError: when query does not conform to format
+
+    """
+    pattern = r"^\s*SELECT\s*[\S\s]+FROM \w+\s*(?:JOIN \w+ ON \w+\.\w+_id = \w+\.id\s*)+"
+    if not re.match(pattern, query):
+        message = (
+            f"Invalid compare query format. Correct format is\n{correct_format}"
+        )
+        raise InvalidCompareQueryError(message)
 
 
 # ---- Common check functions
@@ -405,9 +433,48 @@ def parse_insert_and_retrieve_query(
     return insert_columns
 
 
-# TODO compare_query parse dingen maken
+def parse_compare_query(
+    cursor: Cursor, query: str, orig_data: pd.DataFrame
+) -> None:
+    """Perform linter checks on compare query and check if correct dataset is passed.
+
+    Args:
+    ----
+        cursor: Cursor that performs interactions with the database
+        query: insert query to be parsed
+        orig_data: to be compared against data in the database
+
+    Raises:
+    ------
+        WrongDatasetPassedError: when columns with '_id' in their name are detected in orig_data
+
+    """
+    check_compare_query(query, cursor.compare_format)
+    if any("_id" in col for col in orig_data.columns):
+        message = """Dataset contains columns with '_id' in the name. 
+        Did you perhaps pass [data] instead of [orig_data] to compare()? 😊"""
+        raise WrongDatasetPassedError(message)
+
 
 # ---- Database interface functions
+
+
+# TODO optie toevoegen om via COPY data in te voegen
+def _insert(
+    cursor: Cursor, query: str, data: pd.DataFrame, columns: list[str]
+) -> None:
+    """Perform insert operation.
+
+    Args:
+    ----
+        cursor: cursor that performs interactions with the database.
+        query: insert query
+        data: to be inserted into the database
+        columns: that are to be inserted from data
+
+    """
+    data = data[columns].drop_duplicates()  # type: ignore
+    cursor.executemany(query, data.to_dict("records"))
 
 
 def insert(cursor: Cursor, query: str, data: pd.DataFrame) -> None:
@@ -423,10 +490,47 @@ def insert(cursor: Cursor, query: str, data: pd.DataFrame) -> None:
         data: to be inserted into the database
 
     """
-    components = parse_insert_query(cursor, query, data)
+    columns = parse_insert_query(cursor, query, data)
+    _insert(cursor, query, data, columns)
 
-    data = data[components.columns].drop_duplicates()  # type: ignore
-    cursor.executemany(query, data.to_dict("records"))
+
+def _retrieve(
+    cursor: Cursor,
+    query: str,
+    data: pd.DataFrame,
+    columns: list[str],
+    *,
+    replace: bool,
+) -> pd.DataFrame:
+    """Perform retrieval from database.
+
+    Args:
+    ----
+        cursor: cursor that performs interactions with the database.
+        query: retrieve query
+        data: to attach ids to
+        columns: on which to merge
+        replace: if columns are to be dropped
+
+    Returns:
+    -------
+        pd.DataFrame with ids columns merged in
+
+    """
+    orig_len = len(data)
+
+    cursor.execute(query)
+    ids_data = pd.DataFrame(cursor.fetchall())
+
+    data = data.merge(ids_data, how="left", on=columns)
+    assert not len(data) < orig_len, "Rows were lost when merging on ids."
+    assert not len(data) > orig_len, "Rows were duplicated when merging on ids."
+
+    if replace:
+        non_id_columns = [col for col in columns if "_id" not in col]
+        data = data.drop(columns=non_id_columns)
+
+    return data
 
 
 def retrieve_ids(
@@ -449,20 +553,7 @@ def retrieve_ids(
 
     """
     columns = parse_retrieve_query(cursor, query, data)
-    orig_len = len(data)
-
-    cursor.execute(query)
-    ids_data = pd.DataFrame(cursor.fetchall())
-
-    data = data.merge(ids_data, how="left", on=columns)
-    assert not len(data) < orig_len, "Rows were lost when merging on ids."
-    assert not len(data) > orig_len, "Rows were duplicated when merging on ids."
-
-    if replace:
-        non_id_columns = [col for col in columns if "_id" not in col]
-        data = data.drop(columns=non_id_columns)
-
-    return data
+    return _retrieve(cursor, query, data, columns, replace=replace)
 
 
 def insert_and_retrieve_ids(
@@ -495,26 +586,34 @@ def insert_and_retrieve_ids(
     columns = parse_insert_and_retrieve_query(
         cursor, insert_query, retrieve_query, data
     )
-    orig_len = len(data)
-
-    # insert
-    insert_data = data[columns].drop_duplicates()  # type: ignore
-    cursor.executemany(insert_query, insert_data.to_dict("records"))  # type: ignore
-
-    # retrieve
-    cursor.execute(retrieve_query)
-    ids_data = pd.DataFrame(cursor.fetchall())
-
-    data = data.merge(ids_data, how="left", on=columns)
-    assert not len(data) < orig_len, "Rows were lost when merging on ids."
-    assert not len(data) > orig_len, "Rows were duplicated when merging on ids."
-
-    if replace:
-        non_id_columns = [col for col in columns if "_id" not in col]
-        data = data.drop(columns=non_id_columns)
-
-    return data
+    _insert(cursor, insert_query, data, columns)
+    return _retrieve(cursor, retrieve_query, data, columns, replace=replace)
 
 
-def compare(cursor: Cursor, query: str, data: pd.DataFrame) -> pd.DataFrame:
-    pass
+def compare(cursor: Cursor, query: str, orig_data: pd.DataFrame) -> None:
+    """Compare data in the database against the original dataset.
+
+    Args:
+    ----
+        cursor: cursor that peforms interactions with the database
+        query: compare query of the following format:
+            SELECT
+                <table>.<column> as <alias>,
+                <table>.<column>,
+                <column>,
+                ...
+            FROM <table>
+                JOIN <other_table> ON <other_table>.<table>_id = <table>.id
+                JOIN ...
+            ...
+        orig_data: original data to be stored in the database, before any processing
+
+    """
+    parse_compare_query(cursor, query, orig_data)
+    cursor.execute(query)
+    data = pd.DataFrame(cursor.fetchall())
+
+    orig_data = orig_data.sort_values(by=orig_data.columns.tolist())
+    data = data.sort_values(by=orig_data.columns.tolist())
+
+    pd.testing.assert_frame_equal(orig_data, data, check_like=True)

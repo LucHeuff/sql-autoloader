@@ -16,8 +16,11 @@ from etl_components.connections import (
     SQLiteCursor,
 )
 from etl_components.interactions import (
+    InvalidCompareQueryError,
     InvalidInsertQueryError,
     InvalidRetrieveQueryError,
+    WrongDatasetPassedError,
+    check_compare_query,
     check_insert_query,
     check_retrieve_query,
     get_columns_from_insert,
@@ -25,6 +28,7 @@ from etl_components.interactions import (
     get_table_from_insert,
     get_table_from_retrieve,
     get_values_from_insert,
+    parse_compare_query,
     parse_insert_query,
     parse_retrieve_query,
 )
@@ -205,6 +209,43 @@ def retrieve_query_generator(
     w = draw(st.lists(gap_generator(), min_size=5, max_size=5))
     column_names = ", ".join(columns)
     return f"{w[0]}SELECT{w[1]}id as {table}_id, {column_names}{w[2]}FROM{w[3]}{table}"
+
+
+@composite
+def compare_query_generator(draw: DrawFn, columns: list[str]) -> str:
+    """Generate a valid compare query.
+
+    Args:
+    ----
+        draw: hypothesis draw function
+        columns: columns to be compared
+
+    Returns:
+    -------
+       compare query as string
+
+    """
+    n = len(columns)
+    w = draw(st.lists(gap_generator(), min_size=5, max_size=5))
+    tables = draw(
+        st.lists(table_name_generator(), min_size=n, max_size=n, unique=True)
+    )
+    dotted = draw(st.lists(st.booleans(), min_size=n, max_size=n))
+
+    select_section = f"{w[0]}SELECT{w[1]}"
+    dotted_columns = [
+        f"{table}.{column}" if dot else f"{column}"
+        for (table, column, dot) in zip(columns, tables, dotted)
+    ]
+    columns_section = ", ".join(dotted_columns)
+    from_section = f"{w[2]}FROM {tables[0]}{w[3]}"
+    joins = [
+        f"\tJOIN {table2} ON {table2}.{table1}_id = {table1}.id"
+        for (table1, table2) in zip(tables[:-1], tables[1:])
+    ]
+    joins_section = "\n".join(joins) + f"{w[4]}"
+
+    return select_section + columns_section + from_section + joins_section
 
 
 # ---- Strategies
@@ -395,7 +436,7 @@ def retrieve_query_strategy(draw: DrawFn) -> RetrieveQueryComponents:
 
 @composite
 def invalid_retrieve_query_strategy(draw: DrawFn) -> list[str]:
-    """Generate random invalid retrieve query.
+    """Generate random invalid retrieve queries.
 
     Args:
     ----
@@ -444,6 +485,100 @@ def parse_retrieve_strategy(draw: DrawFn) -> ParseRetrieveQueryComponents:
     query_components = draw(retrieve_query_strategy())
     data = pd.DataFrame({col: [1, 2, 3] for col in query_components.columns})
     return ParseRetrieveQueryComponents(
+        generated_cursor.cursor, **query_components.__dict__, data=data
+    )
+
+
+# ---- compare query strategies
+
+
+@dataclass
+class CompareQueryComponents:
+    """Encapsulates retrieve_query_strategy() outputs."""
+
+    query: str
+    columns: list[str]
+
+
+@composite
+def compare_query_strategy(draw: DrawFn) -> CompareQueryComponents:
+    """Generate a random valid compare query.
+
+    Args:
+    ----
+        draw: hypothesis draw function
+
+    Returns:
+    -------
+        CompareQueryComponents
+
+    """
+    num_columns = draw(st.integers(min_value=2, max_value=5))
+    columns = draw(
+        st.lists(
+            column_name_generator(),
+            min_size=num_columns,
+            max_size=num_columns,
+            unique=True,
+        )
+    )
+
+    query = draw(compare_query_generator(columns))
+    return CompareQueryComponents(query, columns)
+
+
+@composite
+def invalid_compare_query_strategy(draw: DrawFn) -> list[str]:
+    """Generate random invalid compare queries.
+
+    Args:
+    ----
+        draw: hypothesis draw function
+
+    Returns:
+    -------
+        list of invalid compare queries
+
+    """
+    random_text = draw(st.text(min_size=2, max_size=10))
+    valid_compare = draw(compare_query_strategy())
+
+    no_joins_query = re.sub("JOIN", "", valid_compare.query)
+    no_id_query = valid_compare.query.replace("id", "")
+    lowercase_query = valid_compare.query.lower()
+
+    return [random_text, no_joins_query, no_id_query, lowercase_query]
+
+
+@dataclass
+class ParseCompareQueryComponents:
+    """Encapsulates parse_compare_strategy() outputs."""
+
+    cursor: PostgresCursor | SQLiteCursor
+    query: str
+    columns: list[str]
+    data: pd.DataFrame
+
+
+@composite
+def parse_compare_strategy(draw: DrawFn) -> ParseCompareQueryComponents:
+    """Generate examples for parse_compare_query().
+
+    Args:
+    ----
+        draw: hypothesis draw function.
+
+    Returns:
+    -------
+        ParseCompareQueryComponents
+
+    """
+    generated_cursor = draw(cursor_generator())
+    query_components = draw(compare_query_strategy())
+    # making sure '_id' does not accidentally show up in column names
+    columns = [re.sub("_id", "__", col) for col in query_components.columns]
+    data = pd.DataFrame({col: [1, 2, 3] for col in columns})
+    return ParseCompareQueryComponents(
         generated_cursor.cursor, **query_components.__dict__, data=data
     )
 
@@ -519,7 +654,7 @@ def test_get_columns_from_insert_raises(
 
     """
     # columns entered wrong
-    replace_columns = "|".join(components.columns)
+    replace_columns = ", ".join(components.columns)
     wrong_query = re.sub(replace_columns, "", components.query)
 
     with pytest.raises(InvalidInsertQueryError):
@@ -769,3 +904,71 @@ def test_parse_retrieve_query_raises(
     data.columns = [f"{col}_" for col in data.columns]
     with pytest.raises(InvalidRetrieveQueryError):
         parse_retrieve_query(components.cursor, components.query, data)  # type: ignore
+
+
+# ---- Testing compare query parsing
+
+
+@given(components=compare_query_strategy())
+def test_check_compare_query(components: CompareQueryComponents) -> None:
+    """Test whether valid compare queries correctly pass.
+
+    Args:
+    ----
+        components: CompareQueryComponents
+
+    """
+    assert (
+        check_compare_query(components.query, correct_format=TEST_FORMAT)
+        is None
+    )
+
+
+@given(queries=invalid_compare_query_strategy())
+def test_check_compare_query_raises(queries: list[str]) -> None:
+    """Test whether invalid compare queries correctly raise exceptions.
+
+    Args:
+    ----
+        queries: list of invalid queries
+
+    """
+    for query in queries:
+        with pytest.raises(InvalidCompareQueryError):
+            check_compare_query(query, TEST_FORMAT)
+
+
+@given(components=parse_compare_strategy())
+def test_parse_compare_query(components: ParseCompareQueryComponents) -> None:
+    """Test whether parse_compare_query() correctly passes.
+
+    Args:
+    ----
+        components: ParseCompareQueryComponents
+
+    """
+    assert (
+        parse_compare_query(
+            components.cursor,  # type: ignore
+            components.query,
+            components.data,
+        )
+        is None
+    )
+
+
+@given(components=parse_compare_strategy())
+def test_parse_compare_query_raises(
+    components: ParseCompareQueryComponents,
+) -> None:
+    """Test whether parse_compare_query() correctly raises an exception when '_id' are in column names.
+
+    Args:
+    ----
+        components: ParseCompareQueryComponents
+
+    """
+    data = components.data
+    data.columns = [f"{col}_id" for col in data.columns]
+    with pytest.raises(WrongDatasetPassedError):
+        parse_compare_query(components.cursor, components.query, data)  # type: ignore
