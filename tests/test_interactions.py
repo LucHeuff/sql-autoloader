@@ -12,8 +12,9 @@ from hypothesis.strategies import DrawFn, composite
 from etl_components.connections import (
     POSTGRES_VALUES_PATTERN,
     SQLITE_VALUES_PATTERN,
-    PostgresCursor,
-    SQLiteCursor,
+    CursorFormats,
+    postgres_formats,
+    sqlite_formats,
 )
 from etl_components.interactions import (
     InvalidCompareQueryError,
@@ -126,19 +127,19 @@ def sqlite_value_pattern(column: str) -> str:
 
 
 @dataclass
-class GeneratedCursor:
-    """Encapsulates cursor_generator() output."""
+class GeneratedFormat:
+    """Encapsulates cursor_formats_generator() output."""
 
-    cursor: PostgresCursor | SQLiteCursor
+    cursor_formats: CursorFormats
     pattern_function: pattern_fn
 
 
-POSTGRES_CURSOR_PAIR = GeneratedCursor(PostgresCursor, postgres_value_pattern)  # type: ignore
-SQLITE_CURSOR_PAIR = GeneratedCursor(SQLiteCursor, sqlite_value_pattern)  # type: ignore
+POSTGRES_CURSOR_PAIR = GeneratedFormat(postgres_formats, postgres_value_pattern)
+SQLITE_CURSOR_PAIR = GeneratedFormat(sqlite_formats, sqlite_value_pattern)
 
 
 @composite
-def cursor_generator(draw: DrawFn) -> GeneratedCursor:
+def cursor_formats_generator(draw: DrawFn) -> GeneratedFormat:
     """Generate a random pattern function.
 
     Args:
@@ -263,14 +264,14 @@ class InsertQueryComponents:
 
 @composite
 def insert_query_strategy(
-    draw: DrawFn, generated_cursor: GeneratedCursor | None = None
+    draw: DrawFn, generated_format: GeneratedFormat | None = None
 ) -> InsertQueryComponents:
     """Generate random valid insert query.
 
     Args:
     ----
         draw: hypothesis draw function
-        generated_cursor: GeneratedCursor
+        generated_format: GeneratedCursor
 
     Returns:
     -------
@@ -295,11 +296,11 @@ def insert_query_strategy(
             unique=True,
         )
     )
-    if generated_cursor is None:
-        generated_cursor = draw(cursor_generator())
+    if generated_format is None:
+        generated_format = draw(cursor_formats_generator())
     query = draw(
         insert_query_generator(
-            table, columns, values, generated_cursor.pattern_function
+            table, columns, values, generated_format.pattern_function
         )
     )
     return InsertQueryComponents(query, table, columns, values)
@@ -339,12 +340,12 @@ def invalid_insert_query_strategy(draw: DrawFn) -> list[str]:
 class ParseInsertQueryComponents:
     """Encapsulates parse_insert_strategy() outputs."""
 
-    cursor: PostgresCursor | SQLiteCursor
     query: str
     table: str
     columns: list[str]
     values: list[str]
     data: pd.DataFrame
+    cursor_formats: CursorFormats
 
 
 @composite
@@ -360,15 +361,15 @@ def parse_insert_strategy(draw: DrawFn) -> ParseInsertQueryComponents:
        ParseInsertQueryComponents
 
     """
-    generated_cursor = draw(cursor_generator())
+    generated_format = draw(cursor_formats_generator())
     query_components = draw(
-        insert_query_strategy(generated_cursor=generated_cursor)
+        insert_query_strategy(generated_format=generated_format)
     )
     data = pd.DataFrame({col: [1, 2, 3] for col in query_components.values})
     return ParseInsertQueryComponents(
-        generated_cursor.cursor,
         **query_components.__dict__,
         data=data,
+        cursor_formats=generated_format.cursor_formats,
     )
 
 
@@ -461,11 +462,11 @@ def invalid_retrieve_query_strategy(draw: DrawFn) -> list[str]:
 class ParseRetrieveQueryComponents:
     """Encapsulates parse_retrieve_strategy() outputs."""
 
-    cursor: PostgresCursor | SQLiteCursor
     query: str
     table: str
     columns: list[str]
     data: pd.DataFrame
+    cursor_formats: CursorFormats
 
 
 @composite
@@ -481,11 +482,13 @@ def parse_retrieve_strategy(draw: DrawFn) -> ParseRetrieveQueryComponents:
        ParseRetrieveQueryComponents
 
     """
-    generated_cursor = draw(cursor_generator())
+    generated_format = draw(cursor_formats_generator())
     query_components = draw(retrieve_query_strategy())
     data = pd.DataFrame({col: [1, 2, 3] for col in query_components.columns})
     return ParseRetrieveQueryComponents(
-        generated_cursor.cursor, **query_components.__dict__, data=data
+        **query_components.__dict__,
+        data=data,
+        cursor_formats=generated_format.cursor_formats,
     )
 
 
@@ -554,10 +557,10 @@ def invalid_compare_query_strategy(draw: DrawFn) -> list[str]:
 class ParseCompareQueryComponents:
     """Encapsulates parse_compare_strategy() outputs."""
 
-    cursor: PostgresCursor | SQLiteCursor
     query: str
     columns: list[str]
     data: pd.DataFrame
+    cursor_formats: CursorFormats
 
 
 @composite
@@ -573,13 +576,15 @@ def parse_compare_strategy(draw: DrawFn) -> ParseCompareQueryComponents:
         ParseCompareQueryComponents
 
     """
-    generated_cursor = draw(cursor_generator())
+    generated_format = draw(cursor_formats_generator())
     query_components = draw(compare_query_strategy())
     # making sure '_id' does not accidentally show up in column names
     columns = [re.sub("_id", "__", col) for col in query_components.columns]
     data = pd.DataFrame({col: [1, 2, 3] for col in columns})
     return ParseCompareQueryComponents(
-        generated_cursor.cursor, **query_components.__dict__, data=data
+        **query_components.__dict__,
+        data=data,
+        cursor_formats=generated_format.cursor_formats,
     )
 
 
@@ -661,7 +666,7 @@ def test_get_columns_from_insert_raises(
         get_columns_from_insert(wrong_query, TEST_FORMAT)
 
 
-@given(components=insert_query_strategy(generated_cursor=SQLITE_CURSOR_PAIR))
+@given(components=insert_query_strategy(generated_format=SQLITE_CURSOR_PAIR))
 def test_get_values_from_insert_sqlite(
     components: InsertQueryComponents,
 ) -> None:
@@ -680,7 +685,7 @@ def test_get_values_from_insert_sqlite(
     )
 
 
-@given(components=insert_query_strategy(generated_cursor=POSTGRES_CURSOR_PAIR))
+@given(components=insert_query_strategy(generated_format=POSTGRES_CURSOR_PAIR))
 def test_get_values_from_insert_sqlite_raises(
     components: InsertQueryComponents,
 ) -> None:
@@ -697,7 +702,7 @@ def test_get_values_from_insert_sqlite_raises(
         )
 
 
-@given(components=insert_query_strategy(generated_cursor=POSTGRES_CURSOR_PAIR))
+@given(components=insert_query_strategy(generated_format=POSTGRES_CURSOR_PAIR))
 def test_get_values_from_insert_postgres(
     components: InsertQueryComponents,
 ) -> None:
@@ -716,7 +721,7 @@ def test_get_values_from_insert_postgres(
     )
 
 
-@given(components=insert_query_strategy(generated_cursor=SQLITE_CURSOR_PAIR))
+@given(components=insert_query_strategy(generated_format=SQLITE_CURSOR_PAIR))
 def test_get_values_from_insert_postgres_raises(
     components: InsertQueryComponents,
 ) -> None:
@@ -745,9 +750,7 @@ def test_parse_insert_query(components: ParseInsertQueryComponents) -> None:
     out = components.columns
     assert (
         parse_insert_query(
-            components.cursor,  # type: ignore
-            components.query,
-            components.data,
+            components.query, components.data, components.cursor_formats
         )
         == out
     )
@@ -767,7 +770,7 @@ def test_parse_insert_query_raises(
     data = components.data
     data.columns = [f"{col}_" for col in data.columns]
     with pytest.raises(InvalidInsertQueryError):
-        parse_insert_query(components.cursor, components.query, data)  # type: ignore
+        parse_insert_query(components.query, data, components.cursor_formats)
 
 
 # ---- Testing retrieve query parsing
@@ -881,9 +884,7 @@ def test_parse_retrieve_query(components: ParseRetrieveQueryComponents) -> None:
     out = components.columns
     assert (
         parse_retrieve_query(
-            components.cursor,  # type: ignore
-            components.query,
-            components.data,
+            components.query, components.data, components.cursor_formats
         )
         == out
     )
@@ -903,7 +904,7 @@ def test_parse_retrieve_query_raises(
     data = components.data
     data.columns = [f"{col}_" for col in data.columns]
     with pytest.raises(InvalidRetrieveQueryError):
-        parse_retrieve_query(components.cursor, components.query, data)  # type: ignore
+        parse_retrieve_query(components.query, data, components.cursor_formats)
 
 
 # ---- Testing compare query parsing
@@ -949,9 +950,7 @@ def test_parse_compare_query(components: ParseCompareQueryComponents) -> None:
     """
     assert (
         parse_compare_query(
-            components.cursor,  # type: ignore
-            components.query,
-            components.data,
+            components.query, components.data, components.cursor_formats
         )
         is None
     )
@@ -971,4 +970,4 @@ def test_parse_compare_query_raises(
     data = components.data
     data.columns = [f"{col}_id" for col in data.columns]
     with pytest.raises(WrongDatasetPassedError):
-        parse_compare_query(components.cursor, components.query, data)  # type: ignore
+        parse_compare_query(components.query, data, components.cursor_formats)

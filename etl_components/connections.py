@@ -1,4 +1,5 @@
 import sqlite3
+from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, Union
 
@@ -8,8 +9,18 @@ from psycopg.rows import dict_row
 
 config = dotenv_values(".env")
 
+SQLITE_INSERT_FORMAT = """
+    INSERT INTO <table> (<column1>, <column2>, ...)
+    VALUES (:<column1_source>, :<column2_source>, ...)
+"""
 SQLITE_VALUES_PATTERN = r":(\w+)"
+
+POSTGRES_INSERT_FORMAT = """
+    INSERT INTO <table> (<column1>, <column2>, ...)
+    VALUES (%(<column1_source>)s, %(<column2_source>)s, ...)
+"""
 POSTGRES_VALUES_PATTERN = r"\((\w+)\)s"
+
 # SQLite and PostgreSQL use the same format for retrieval
 RETRIEVE_FORMAT = """
     SELECT id as <table>_id, <column1> as <alias1>, <column2> FROM <table>
@@ -25,6 +36,48 @@ COMPARE_FORMAT = """
         JOIN ...
     ...
 """
+
+
+@dataclass
+class CursorFormats:
+    """Stores formats and patterns of SQL queries."""
+
+    insert_format: str
+    values_pattern: str
+    retrieve_format: str
+    compare_format: str
+
+
+sqlite_formats = CursorFormats(
+    SQLITE_INSERT_FORMAT, SQLITE_VALUES_PATTERN, RETRIEVE_FORMAT, COMPARE_FORMAT
+)
+
+postgres_formats = CursorFormats(
+    POSTGRES_INSERT_FORMAT,
+    POSTGRES_VALUES_PATTERN,
+    RETRIEVE_FORMAT,
+    COMPARE_FORMAT,
+)
+
+Cursor = sqlite3.Cursor | psycopg.Cursor
+
+
+def get_cursor_formats(cursor: Cursor) -> CursorFormats:
+    """Get formats for this cursor.
+
+    Args:
+    ----
+        cursor: active cursor
+
+    Returns:
+    -------
+        CursorFormat
+
+    """
+    if isinstance(cursor, sqlite3.Cursor):
+        return sqlite_formats
+    if isinstance(cursor, psycopg.Cursor):
+        return postgres_formats
 
 
 class RollbackCausedError(Exception):
@@ -56,14 +109,6 @@ class SQLiteCursor:
     Assumes the following variables are set in .env:
         SQLITE_DB: filename to sqlite DB. If not available, defaults to in memory db.
     """
-
-    insert_format = """
-        INSERT INTO <table> (<column1>, <column2>, ...)
-        VALUES (:<column1_source>, :<column2_source>, ...)
-    """
-    values_pattern = SQLITE_VALUES_PATTERN
-    retrieve_format = RETRIEVE_FORMAT
-    compare_format = COMPARE_FORMAT
 
     def __init__(self, db: Union[str, None] = None) -> None:
         """Create a connection to SQLite database.
@@ -126,14 +171,6 @@ class PostgresCursor:
         connection: connection with the server, using dict_row row factory.
 
     """
-
-    insert_format = """
-        INSERT INTO <table> (<column1>, <column2>, ...)
-        VALUES (%(<column1_source>)s, %(<column2_source>)s, ...)
-    """
-    values_pattern = POSTGRES_VALUES_PATTERN
-    retrieve_format = RETRIEVE_FORMAT
-    compare_format = COMPARE_FORMAT
 
     def __init__(self) -> None:
         """Create a connection with the PostgreSQL server."""

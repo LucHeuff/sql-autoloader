@@ -1,48 +1,48 @@
 import re
-from typing import Protocol
 
 import pandas as pd
 
+from etl_components.connections import Cursor, CursorFormats, get_cursor_formats
 
-class Cursor(Protocol):
-    """Protocol for cursor used by interaction functions."""
+# TODO: Protocol does not work properly, need to type hint to the specific underlying cursors
+# TODO store format and pattern variables in a different way
+# class Cursor(Protocol):
+#     """Protocol for cursor used by interaction functions."""
+#
+#     def execute(self, *args, **kwargs) -> None:
+#         """Execute query.
+#
+#         Args:
+#         ----
+#             query: SQL query as string
+#             data: data in dictionary format
+#
+#         """
+#         ...
+#
+#     def executemany(self, *args, **kwargs) -> None:
+#         """Executy query for multiple input rows.
+#
+#         Args:
+#         ----
+#             query: SQL query as string
+#             data: data in list of dictionaries
+#
+#         """
+#         ...
+#
+#     def fetchall(self) -> Any:
+#         """Fetch all results from cursor.
+#
+#         Returns
+#         -------
+#             list of dictionaries containing data fetched from cursor.
+#
+#         """
+#         ...
+#
 
-    insert_format: str
-    values_pattern: str
-    retrieve_format: str
-    compare_format: str
-
-    def execute(self, query: str, data: dict | None = None) -> None:
-        """Execute query.
-
-        Args:
-        ----
-            query: SQL query as string
-            data: data in dictionary format
-
-        """
-        ...
-
-    def executemany(self, query: str, data: list[dict]) -> None:
-        """Executy query for multiple input rows.
-
-        Args:
-        ----
-            query: SQL query as string
-            data: data in list of dictionaries
-
-        """
-        ...
-
-    def fetchall(self) -> list[dict]:
-        """Fetch all results from cursor.
-
-        Returns
-        -------
-            list of dictionaries containing data fetched from cursor.
-
-        """
-        ...
+# TODO remove dependency on cursor out of parse_functions and pass the CursorFormats instead
 
 
 class InvalidInsertQueryError(Exception):
@@ -307,17 +307,17 @@ def check_columns_in_data(columns: list[str], data: pd.DataFrame) -> bool:
 
 
 def parse_insert_query(
-    cursor: Cursor,
     query: str,
     data: pd.DataFrame,
+    cursor_formats: CursorFormats,
 ) -> list[str]:
     """Perform linter checks on insert query and data and return table name, column names and value column names.
 
     Args:
     ----
-        cursor: Cursor that performs interactions with the database
         query: insert query to be parsed
         data: to be inserted into the database
+        cursor_formats: CursorFormats containing correct formats for database
 
     Returns:
     -------
@@ -328,8 +328,8 @@ def parse_insert_query(
         InvalidInsertQueryError: when value columns do not appear in data
 
     """
-    correct_format = cursor.insert_format
-    pattern = cursor.values_pattern
+    correct_format = cursor_formats.insert_format
+    pattern = cursor_formats.values_pattern
     check_insert_query(query, correct_format)
     columns = get_columns_from_insert(query, correct_format)
     values = get_values_from_insert(query, pattern, correct_format)
@@ -346,15 +346,15 @@ def parse_insert_query(
 
 
 def parse_retrieve_query(
-    cursor: Cursor, query: str, data: pd.DataFrame
+    query: str, data: pd.DataFrame, cursor_formats: CursorFormats
 ) -> list[str]:
     """Perform linter checks on retrieve query and return table name and column names.
 
     Args:
     ----
-        cursor: Cursor that performs interactions with the database
         query: insert query to be parsed
         data: to be inserted into the database
+        cursor_formats: CursorFormats containing correct formats for database
 
     Returns:
     -------
@@ -365,7 +365,7 @@ def parse_retrieve_query(
         InvalidRetrieveQueryError: when columns do not appear in data
 
     """
-    correct_format = cursor.retrieve_format
+    correct_format = cursor_formats.retrieve_format
     check_retrieve_query(query, correct_format)
     columns = get_columns_from_retrieve(query, correct_format)
 
@@ -383,16 +383,19 @@ def parse_retrieve_query(
 
 
 def parse_insert_and_retrieve_query(
-    cursor: Cursor, insert_query: str, retrieve_query: str, data: pd.DataFrame
+    insert_query: str,
+    retrieve_query: str,
+    data: pd.DataFrame,
+    cursor_formats: CursorFormats,
 ) -> list[str]:
     """Perform linter checks on insert and retrieve queries and data and check consistency.
 
     Args:
     ----
-        cursor: Cursor that performs interactions with the database
         insert_query: insert query to be parsed
         retrieve_query: retrieve query to be parsed
         data: to be inserted into the database
+        cursor_formats: CursorFormats containing correct formats for database
 
     Returns:
     -------
@@ -404,11 +407,15 @@ def parse_insert_and_retrieve_query(
         InvalidInsertAndRetrieveQueryError: if tables or columns don't match between queries
 
     """
-    insert_columns = parse_insert_query(cursor, insert_query, data)
-    insert_table = get_table_from_insert(insert_query, cursor.insert_format)
-    retrieve_columns = parse_retrieve_query(cursor, retrieve_query, data)
+    insert_columns = parse_insert_query(insert_query, data, cursor_formats)
+    insert_table = get_table_from_insert(
+        insert_query, cursor_formats.insert_format
+    )
+    retrieve_columns = parse_retrieve_query(
+        retrieve_query, data, cursor_formats
+    )
     retrieve_table = get_table_from_retrieve(
-        retrieve_query, cursor.retrieve_format
+        retrieve_query, cursor_formats.retrieve_format
     )
 
     if insert_table != retrieve_table:
@@ -432,22 +439,23 @@ def parse_insert_and_retrieve_query(
 
 
 def parse_compare_query(
-    cursor: Cursor, query: str, orig_data: pd.DataFrame
+    query: str, orig_data: pd.DataFrame, cursor_formats: CursorFormats
 ) -> None:
     """Perform linter checks on compare query and check if correct dataset is passed.
 
     Args:
     ----
-        cursor: Cursor that performs interactions with the database
         query: insert query to be parsed
         orig_data: to be compared against data in the database
+        cursor_formats: CursorFormats containing correct formats for database
 
     Raises:
     ------
         WrongDatasetPassedError: when columns with '_id' in their name are detected in orig_data
 
     """
-    check_compare_query(query, cursor.compare_format)
+    compare_format = cursor_formats.compare_format
+    check_compare_query(query, compare_format)
     if any("_id" in col for col in orig_data.columns):
         message = """Dataset contains columns with '_id' in the name. 
         Did you perhaps pass [data] instead of [orig_data] to compare()? 😊"""
@@ -472,7 +480,7 @@ def _insert(
 
     """
     data = data[columns].drop_duplicates()  # type: ignore
-    cursor.executemany(query, data.to_dict("records"))
+    cursor.executemany(query, data.to_dict("records"))  # type: ignore
 
 
 def insert(cursor: Cursor, query: str, data: pd.DataFrame) -> None:
@@ -488,7 +496,8 @@ def insert(cursor: Cursor, query: str, data: pd.DataFrame) -> None:
         data: to be inserted into the database
 
     """
-    columns = parse_insert_query(cursor, query, data)
+    cursor_formats = get_cursor_formats(cursor)
+    columns = parse_insert_query(query, data, cursor_formats)
     _insert(cursor, query, data, columns)
 
 
@@ -517,7 +526,7 @@ def _retrieve(
     """
     orig_len = len(data)
 
-    cursor.execute(query)
+    cursor.execute(query)  # type: ignore
     ids_data = pd.DataFrame(cursor.fetchall())
 
     data = data.merge(ids_data, how="left", on=columns)
@@ -550,7 +559,8 @@ def retrieve_ids(
 
 
     """
-    columns = parse_retrieve_query(cursor, query, data)
+    cursor_formats = get_cursor_formats(cursor)
+    columns = parse_retrieve_query(query, data, cursor_formats)
     return _retrieve(cursor, query, data, columns, replace=replace)
 
 
@@ -581,8 +591,9 @@ def insert_and_retrieve_ids(
         data to which the id columns are merged
 
     """
+    cursor_formats = get_cursor_formats(cursor)
     columns = parse_insert_and_retrieve_query(
-        cursor, insert_query, retrieve_query, data
+        insert_query, retrieve_query, data, cursor_formats
     )
     _insert(cursor, insert_query, data, columns)
     return _retrieve(cursor, retrieve_query, data, columns, replace=replace)
@@ -607,8 +618,9 @@ def compare(cursor: Cursor, query: str, orig_data: pd.DataFrame) -> None:
         orig_data: original data to be stored in the database, before any processing
 
     """
-    parse_compare_query(cursor, query, orig_data)
-    cursor.execute(query)
+    cursor_formats = get_cursor_formats(cursor)
+    parse_compare_query(query, orig_data, cursor_formats)
+    cursor.execute(query)  # type: ignore
     data = pd.DataFrame(cursor.fetchall())
 
     orig_data = orig_data.sort_values(by=orig_data.columns.tolist())
