@@ -3,8 +3,6 @@ from typing import Protocol
 
 import pandas as pd
 
-# TODO fix docstrings and make them consistent
-
 
 class Cursor(Protocol):
     """Protocol for cursor used by interaction functions."""
@@ -85,7 +83,7 @@ def check_insert_query(query: str, correct_format: str) -> None:
 
     Args:
     ----
-        query: to be checked.
+        query: to be checked
         correct_format: what the correct format should be
 
     Raises:
@@ -107,15 +105,15 @@ def get_table_from_insert(query: str, correct_format: str) -> str:
     Args:
     ----
         query: to be parsed.
-        correct_format: what the correct format should be.
+        correct_format: what the correct format should be
 
     Returns:
     -------
-        table name.
+        table name
 
     Raises:
     ------
-        InvalidInsertQueryError: if table name could not be found.
+        InvalidInsertQueryError: if table name could not be found
 
     """
     pattern = r"\s*INSERT INTO\s*(\w+)"
@@ -131,17 +129,17 @@ def get_columns_from_insert(query: str, correct_format: str) -> list[str]:
 
     Args:
     ----
-        query: to be parsed.
-        correct_format: what the correct format should be.
+        query: to be parsed
+        correct_format: what the correct format should be
 
     Returns:
     -------
-        list of column names.
+        list of column names
 
 
     Raises:
     ------
-        InvalidInsertQueryError: if no columns can be found.
+        InvalidInsertQueryError: if no columns can be found
 
     """
     message = f"Invalid insert query, could not find columns. Correct format is:\n{correct_format}"
@@ -163,9 +161,9 @@ def get_values_from_insert(
 
     Args:
     ----
-        query: from which column names must be extracted.
-        pattern: pattern with which to extract values.
-        correct_format: what the correct format should be.
+        query: from which column names must be extracted
+        pattern: pattern with which to extract values
+        correct_format: what the correct format should be
 
     Returns:
     -------
@@ -173,7 +171,7 @@ def get_values_from_insert(
 
     Raises:
     ------
-        InvalidInsertQueryError when no column names can be extracted.
+        InvalidInsertQueryError when no column names can be extracted
 
     """
     columns = re.findall(pattern, query)
@@ -191,12 +189,12 @@ def check_retrieve_query(query: str, correct_format: str) -> None:
 
     Args:
     ----
-        query: to be checked.
-        correct_format: what the correct format should be.
+        query: to be checked
+        correct_format: what the correct format should be
 
     Raises:
     ------
-        InvalidRetrieveQueryError: when query does not conform to format.
+        InvalidRetrieveQueryError: when query does not conform to format
 
     """
     pattern = r"\s*SELECT\s*id as .*\s*FROM\s*\w+$"
@@ -210,8 +208,8 @@ def get_table_from_retrieve(query: str, correct_format: str) -> str:
 
     Args:
     ----
-        query: from which table must be extracted.
-        correct_format: what the correct format should be.
+        query: from which table must be extracted
+        correct_format: what the correct format should be
 
     Returns:
     -------
@@ -219,7 +217,7 @@ def get_table_from_retrieve(query: str, correct_format: str) -> str:
 
     Raises:
     ------
-        InvalidRetrieveQueryError: if table cannot be found.
+        InvalidRetrieveQueryError: if table cannot be found
 
     """
     # fancy named regex that immediately checks if table matches in id and FROM
@@ -236,8 +234,8 @@ def get_columns_from_retrieve(query: str, correct_format: str) -> list[str]:
 
     Args:
     ----
-        query: from which table must be extracted.
-        correct_format: what the correct format should be.
+        query: from which table must be extracted
+        correct_format: what the correct format should be
 
     Returns:
     -------
@@ -245,7 +243,7 @@ def get_columns_from_retrieve(query: str, correct_format: str) -> list[str]:
 
     Raises:
     ------
-        InvalidRetrieveQueryError: if no columns could be found.
+        InvalidRetrieveQueryError: if no columns could be found
 
     """
     message = f"Invalid retrieve query, could not find columns. Correct format is:\n{correct_format}"
@@ -290,7 +288,7 @@ def check_compare_query(query: str, correct_format: str) -> None:
 
 
 def check_columns_in_data(columns: list[str], data: pd.DataFrame) -> bool:
-    """Check whether column names are among the columns in data
+    """Check whether column names are among the columns in data.
 
     Args:
     ----
@@ -319,7 +317,7 @@ def parse_insert_query(
     ----
         cursor: Cursor that performs interactions with the database
         query: insert query to be parsed
-        data: to be inserted into the database.
+        data: to be inserted into the database
 
     Returns:
     -------
@@ -356,7 +354,7 @@ def parse_retrieve_query(
     ----
         cursor: Cursor that performs interactions with the database
         query: insert query to be parsed
-        data: to be inserted into the database.
+        data: to be inserted into the database
 
     Returns:
     -------
@@ -544,11 +542,11 @@ def retrieve_ids(
         query: retrieve query of the following format:
             SELECT id as <table>_id, <column1>, <column2> as <alias>, ... FROM <table>
         data: to which ids are to be merged
-        replace: whether original columns without _id suffix are to be removed.
+        replace: whether original columns without _id suffix are to be removed
 
     Returns:
     -------
-        data to which the id columns are merged.
+        data to which the id columns are merged
 
 
     """
@@ -576,7 +574,7 @@ def insert_and_retrieve_ids(
         retrieve_query: retrieve query of the followig format:
             SELECT id as <table>_id, <column1>, <column2> as <alias>, ... FROM <table>
         data: to be inserted from and to which ids are to be merged
-        replace: whether original columns without _id suffix are to be removed.
+        replace: whether original columns without _id suffix are to be removed
 
     Returns:
     -------
