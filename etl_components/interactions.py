@@ -2,47 +2,7 @@ import re
 
 import pandas as pd
 
-from etl_components.connections import Cursor, CursorFormats, get_cursor_formats
-
-# TODO: Protocol does not work properly, need to type hint to the specific underlying cursors
-# TODO store format and pattern variables in a different way
-# class Cursor(Protocol):
-#     """Protocol for cursor used by interaction functions."""
-#
-#     def execute(self, *args, **kwargs) -> None:
-#         """Execute query.
-#
-#         Args:
-#         ----
-#             query: SQL query as string
-#             data: data in dictionary format
-#
-#         """
-#         ...
-#
-#     def executemany(self, *args, **kwargs) -> None:
-#         """Executy query for multiple input rows.
-#
-#         Args:
-#         ----
-#             query: SQL query as string
-#             data: data in list of dictionaries
-#
-#         """
-#         ...
-#
-#     def fetchall(self) -> Any:
-#         """Fetch all results from cursor.
-#
-#         Returns
-#         -------
-#             list of dictionaries containing data fetched from cursor.
-#
-#         """
-#         ...
-#
-
-# TODO remove dependency on cursor out of parse_functions and pass the CursorFormats instead
+from etl_components.connections import Cursor, CursorFormat, get_cursor_formats
 
 
 class InvalidInsertQueryError(Exception):
@@ -78,13 +38,13 @@ class WrongDatasetPassedError(Exception):
 # ---- Functions to check insert query
 
 
-def check_insert_query(query: str, correct_format: str) -> None:
+def check_insert_query(query: str, cursor_format: CursorFormat) -> None:
     """Check if input query conforms to format.
 
     Args:
     ----
         query: to be checked
-        correct_format: what the correct format should be
+        cursor_format: CursorFormat
 
     Raises:
     ------
@@ -92,20 +52,19 @@ def check_insert_query(query: str, correct_format: str) -> None:
 
     """
     pattern = r"\s*INSERT INTO\s*\w+\s*\(.*\)\s*VALUES\s*\(.*\)"
+    correct = cursor_format.insert_format
     if not re.match(pattern, query):
-        message = (
-            f"Invalid insert query format. Correct format is:\n{correct_format}"
-        )
+        message = f"Invalid insert query format. Correct format is:\n{correct}"
         raise InvalidInsertQueryError(message)
 
 
-def get_table_from_insert(query: str, correct_format: str) -> str:
+def get_table_from_insert(query: str, cursor_format: CursorFormat) -> str:
     """Read table name from query.
 
     Args:
     ----
         query: to be parsed.
-        correct_format: what the correct format should be
+        cursor_format: CursorFormat
 
     Returns:
     -------
@@ -117,20 +76,23 @@ def get_table_from_insert(query: str, correct_format: str) -> str:
 
     """
     pattern = r"\s*INSERT INTO\s*(\w+)"
+    correct = cursor_format.insert_format
     result = re.match(pattern, query)
     if result is None:
-        message = f"Invalid insert query, could not find <table>. Correct format is:\n{correct_format}"
+        message = f"Invalid insert query, could not find <table>. Correct format is:\n{correct}"
         raise InvalidInsertQueryError(message)
     return result.group(1)
 
 
-def get_columns_from_insert(query: str, correct_format: str) -> list[str]:
+def get_columns_from_insert(
+    query: str, cursor_format: CursorFormat
+) -> list[str]:
     """Read column names from insert query.
 
     Args:
     ----
         query: to be parsed
-        correct_format: what the correct format should be
+        cursor_format: CursorFormat
 
     Returns:
     -------
@@ -142,7 +104,8 @@ def get_columns_from_insert(query: str, correct_format: str) -> list[str]:
         InvalidInsertQueryError: if no columns can be found
 
     """
-    message = f"Invalid insert query, could not find columns. Correct format is:\n{correct_format}"
+    correct = cursor_format.insert_format
+    message = f"Invalid insert query, could not find columns. Correct format is:\n{correct}"
     section_pattern = r"^\s*INSERT INTO\s*\w+\s*\((.*)\)\s*VALUES"
     columns_section = re.match(section_pattern, query)
     if columns_section is None:
@@ -155,61 +118,65 @@ def get_columns_from_insert(query: str, correct_format: str) -> list[str]:
 
 
 def get_values_from_insert(
-    query: str, pattern: str, correct_format: str
+    query: str, cursor_format: CursorFormat
 ) -> list[str]:
-    """Extract insert column names from insert query.
+    """Extract insert value names from insert query.
 
     Args:
     ----
-        query: from which column names must be extracted
-        pattern: pattern with which to extract values
-        correct_format: what the correct format should be
+        query: from which value names must be extracted
+        cursor_format: CursorFormat
 
     Returns:
     -------
-        insert columns names
+        insert values names
 
     Raises:
     ------
-        InvalidInsertQueryError when no column names can be extracted
+        InvalidInsertQueryError when no value names can be extracted
 
     """
-    columns = re.findall(pattern, query)
-    if not columns:
-        message = f"Columns provided using invalid format. Correct format is:\n{correct_format}"
+    correct = cursor_format.insert_format
+    pattern = cursor_format.values_pattern
+    values = re.findall(pattern, query)
+    if not values:
+        message = f"Columns provided using invalid format. Correct format is:\n{correct}"
         raise InvalidInsertQueryError(message)
-    return columns
+    return values
 
 
 # ---- Functions to check retrieve query
 
 
-def check_retrieve_query(query: str, correct_format: str) -> None:
+def check_retrieve_query(query: str, cursor_format: CursorFormat) -> None:
     """Check if retrieve query conforms to format.
 
     Args:
     ----
         query: to be checked
-        correct_format: what the correct format should be
+        cursor_format: CursorFormat
 
     Raises:
     ------
         InvalidRetrieveQueryError: when query does not conform to format
 
     """
+    correct = cursor_format.retrieve_format
     pattern = r"\s*SELECT\s*id as .*\s*FROM\s*\w+$"
     if not re.fullmatch(pattern, query):
-        message = f"Invalid retrieve query format. Correct format is:\n{correct_format}"
+        message = (
+            f"Invalid retrieve query format. Correct format is:\n{correct}"
+        )
         raise InvalidRetrieveQueryError(message)
 
 
-def get_table_from_retrieve(query: str, correct_format: str) -> str:
+def get_table_from_retrieve(query: str, cursor_format: CursorFormat) -> str:
     """Extract table name from retrieve query.
 
     Args:
     ----
         query: from which table must be extracted
-        correct_format: what the correct format should be
+        cursor_format: CursorFormat
 
     Returns:
     -------
@@ -221,21 +188,24 @@ def get_table_from_retrieve(query: str, correct_format: str) -> str:
 
     """
     # fancy named regex that immediately checks if table matches in id and FROM
+    correct = cursor_format.retrieve_format
     pattern = r"^\s*SELECT\s*id as (?P<table>\w+)_id.*\s*FROM\s*(?P=table)\s*$"
     result = re.fullmatch(pattern, query)
     if result is None:
-        message = f"Invalid retrieve query, could not find <table>. Correct format is\n{correct_format}"
+        message = f"Invalid retrieve query, could not find <table>. Correct format is\n{correct}"
         raise InvalidRetrieveQueryError(message)
     return result.group(1)
 
 
-def get_columns_from_retrieve(query: str, correct_format: str) -> list[str]:
+def get_columns_from_retrieve(
+    query: str, cursor_format: CursorFormat
+) -> list[str]:
     """Extract columns from retrieve query.
 
     Args:
     ----
         query: from which table must be extracted
-        correct_format: what the correct format should be
+        cursor_format: CursorFormat
 
     Returns:
     -------
@@ -246,7 +216,8 @@ def get_columns_from_retrieve(query: str, correct_format: str) -> list[str]:
         InvalidRetrieveQueryError: if no columns could be found
 
     """
-    message = f"Invalid retrieve query, could not find columns. Correct format is:\n{correct_format}"
+    correct = cursor_format.retrieve_format
+    message = f"Invalid retrieve query, could not find columns. Correct format is:\n{correct}"
     section_pattern = r"^\s*SELECT\s*id as \w+_id, (.*)\s*FROM"
     columns_section = re.match(section_pattern, query)
     if columns_section is None:
@@ -263,24 +234,23 @@ def get_columns_from_retrieve(query: str, correct_format: str) -> list[str]:
 # ---- Functions to check compare query
 
 
-def check_compare_query(query: str, correct_format: str) -> None:
+def check_compare_query(query: str, cursor_format: CursorFormat) -> None:
     """Check if compare query conforms to format.
 
     Args:
     ----
         query: to be checked.
-        correct_format: what the correct format should be
+        cursor_format: CursorFormat
 
     Raises:
     ------
         InvalidCompareQueryError: when query does not conform to format
 
     """
+    correct = cursor_format.compare_format
     pattern = r"^\s*SELECT\s*[\S\s]+FROM \w+\s*(?:JOIN \w+ ON \w+\.\w+_id = \w+\.id\s*)+"
     if not re.match(pattern, query):
-        message = (
-            f"Invalid compare query format. Correct format is\n{correct_format}"
-        )
+        message = f"Invalid compare query format. Correct format is\n{correct}"
         raise InvalidCompareQueryError(message)
 
 
@@ -309,8 +279,8 @@ def check_columns_in_data(columns: list[str], data: pd.DataFrame) -> bool:
 def parse_insert_query(
     query: str,
     data: pd.DataFrame,
-    cursor_formats: CursorFormats,
-) -> list[str]:
+    cursor_formats: CursorFormat,
+) -> tuple[list[str], list[str]]:
     """Perform linter checks on insert query and data and return table name, column names and value column names.
 
     Args:
@@ -321,18 +291,16 @@ def parse_insert_query(
 
     Returns:
     -------
-        column names from insert query
+        column names, value names from insert query
 
     Raises:
     ------
         InvalidInsertQueryError: when value columns do not appear in data
 
     """
-    correct_format = cursor_formats.insert_format
-    pattern = cursor_formats.values_pattern
-    check_insert_query(query, correct_format)
-    columns = get_columns_from_insert(query, correct_format)
-    values = get_values_from_insert(query, pattern, correct_format)
+    check_insert_query(query, cursor_formats)
+    columns = get_columns_from_insert(query, cursor_formats)
+    values = get_values_from_insert(query, cursor_formats)
 
     if not check_columns_in_data(values, data):
         message = f"""Value columns in insert query do not match columns in data:
@@ -342,11 +310,11 @@ def parse_insert_query(
             {data.columns.tolist()}
         """
         raise InvalidInsertQueryError(message)
-    return columns
+    return columns, values
 
 
 def parse_retrieve_query(
-    query: str, data: pd.DataFrame, cursor_formats: CursorFormats
+    query: str, data: pd.DataFrame, cursor_formats: CursorFormat
 ) -> list[str]:
     """Perform linter checks on retrieve query and return table name and column names.
 
@@ -365,9 +333,8 @@ def parse_retrieve_query(
         InvalidRetrieveQueryError: when columns do not appear in data
 
     """
-    correct_format = cursor_formats.retrieve_format
-    check_retrieve_query(query, correct_format)
-    columns = get_columns_from_retrieve(query, correct_format)
+    check_retrieve_query(query, cursor_formats)
+    columns = get_columns_from_retrieve(query, cursor_formats)
 
     # excluding the first since it is the <table>_id columns that is going to be added
     if not check_columns_in_data(columns, data):
@@ -386,7 +353,7 @@ def parse_insert_and_retrieve_query(
     insert_query: str,
     retrieve_query: str,
     data: pd.DataFrame,
-    cursor_formats: CursorFormats,
+    cursor_formats: CursorFormat,
 ) -> list[str]:
     """Perform linter checks on insert and retrieve queries and data and check consistency.
 
@@ -407,16 +374,15 @@ def parse_insert_and_retrieve_query(
         InvalidInsertAndRetrieveQueryError: if tables or columns don't match between queries
 
     """
-    insert_columns = parse_insert_query(insert_query, data, cursor_formats)
-    insert_table = get_table_from_insert(
-        insert_query, cursor_formats.insert_format
+    insert_columns, insert_values = parse_insert_query(
+        insert_query, data, cursor_formats
     )
+
+    insert_table = get_table_from_insert(insert_query, cursor_formats)
     retrieve_columns = parse_retrieve_query(
         retrieve_query, data, cursor_formats
     )
-    retrieve_table = get_table_from_retrieve(
-        retrieve_query, cursor_formats.retrieve_format
-    )
+    retrieve_table = get_table_from_retrieve(retrieve_query, cursor_formats)
 
     if insert_table != retrieve_table:
         message = f"""Insert and retrieve queries don't match. 
@@ -425,11 +391,11 @@ def parse_insert_and_retrieve_query(
         """
         raise InvalidInsertAndRetrieveQueryError(message)
 
-    if insert_columns != retrieve_columns:
+    if insert_values != retrieve_columns:
         message = f"""Insert and retrieve queries don't match. 
         The columns that are inserted should match the columns that are retrieved, but received:
         insert columns: 
-            {insert_columns}
+            {insert_values}
         retrieve columns:
             {retrieve_columns}
         """
@@ -439,7 +405,7 @@ def parse_insert_and_retrieve_query(
 
 
 def parse_compare_query(
-    query: str, orig_data: pd.DataFrame, cursor_formats: CursorFormats
+    query: str, orig_data: pd.DataFrame, cursor_formats: CursorFormat
 ) -> None:
     """Perform linter checks on compare query and check if correct dataset is passed.
 
@@ -454,8 +420,7 @@ def parse_compare_query(
         WrongDatasetPassedError: when columns with '_id' in their name are detected in orig_data
 
     """
-    compare_format = cursor_formats.compare_format
-    check_compare_query(query, compare_format)
+    check_compare_query(query, cursor_formats)
     if any("_id" in col for col in orig_data.columns):
         message = """Dataset contains columns with '_id' in the name. 
         Did you perhaps pass [data] instead of [orig_data] to compare()? 😊"""
@@ -497,7 +462,7 @@ def insert(cursor: Cursor, query: str, data: pd.DataFrame) -> None:
 
     """
     cursor_formats = get_cursor_formats(cursor)
-    columns = parse_insert_query(query, data, cursor_formats)
+    columns, _ = parse_insert_query(query, data, cursor_formats)
     _insert(cursor, query, data, columns)
 
 

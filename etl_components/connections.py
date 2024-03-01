@@ -39,7 +39,7 @@ COMPARE_FORMAT = """
 
 
 @dataclass
-class CursorFormats:
+class CursorFormat:
     """Stores formats and patterns of SQL queries."""
 
     insert_format: str
@@ -48,11 +48,11 @@ class CursorFormats:
     compare_format: str
 
 
-sqlite_formats = CursorFormats(
+sqlite_formats = CursorFormat(
     SQLITE_INSERT_FORMAT, SQLITE_VALUES_PATTERN, RETRIEVE_FORMAT, COMPARE_FORMAT
 )
 
-postgres_formats = CursorFormats(
+postgres_formats = CursorFormat(
     POSTGRES_INSERT_FORMAT,
     POSTGRES_VALUES_PATTERN,
     RETRIEVE_FORMAT,
@@ -62,7 +62,7 @@ postgres_formats = CursorFormats(
 Cursor = sqlite3.Cursor | psycopg.Cursor
 
 
-def get_cursor_formats(cursor: Cursor) -> CursorFormats:
+def get_cursor_formats(cursor: Cursor) -> CursorFormat:
     """Get formats for this cursor.
 
     Args:

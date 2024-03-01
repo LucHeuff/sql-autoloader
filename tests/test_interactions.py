@@ -10,9 +10,7 @@ from hypothesis import given
 from hypothesis.strategies import DrawFn, composite
 
 from etl_components.connections import (
-    POSTGRES_VALUES_PATTERN,
-    SQLITE_VALUES_PATTERN,
-    CursorFormats,
+    CursorFormat,
     postgres_formats,
     sqlite_formats,
 )
@@ -127,35 +125,40 @@ def sqlite_value_pattern(column: str) -> str:
 
 
 @dataclass
-class GeneratedFormat:
+class FormatPair:
     """Encapsulates cursor_formats_generator() output."""
 
-    cursor_formats: CursorFormats
+    cursor_format: CursorFormat
     pattern_function: pattern_fn
 
 
-POSTGRES_CURSOR_PAIR = GeneratedFormat(postgres_formats, postgres_value_pattern)
-SQLITE_CURSOR_PAIR = GeneratedFormat(sqlite_formats, sqlite_value_pattern)
+POSTGRES_FORMAT_PAIR = FormatPair(postgres_formats, postgres_value_pattern)
+SQLITE_FORMAT_PAIR = FormatPair(sqlite_formats, sqlite_value_pattern)
+
+POSTGRES_WRONG_PAIR = FormatPair(postgres_formats, sqlite_value_pattern)
+SQLITE_WRONG_PAIR = FormatPair(sqlite_formats, postgres_value_pattern)
 
 
 @composite
-def cursor_formats_generator(draw: DrawFn) -> GeneratedFormat:
+def format_pair_generator(
+    draw: DrawFn, *, wrong_format_pair: bool = False
+) -> FormatPair:
     """Generate a random pattern function.
 
     Args:
     ----
         draw: hypothesis draw function
+        wrong_format_pair: if the format pair should not match
 
     Returns:
     -------
         GeneratedCursor
 
     """
-    cursor_and_pattern_options = [
-        POSTGRES_CURSOR_PAIR,
-        SQLITE_CURSOR_PAIR,
-    ]
-    return draw(st.sampled_from(cursor_and_pattern_options))
+    options = [POSTGRES_FORMAT_PAIR, SQLITE_FORMAT_PAIR]
+    if wrong_format_pair:
+        options = [POSTGRES_WRONG_PAIR, SQLITE_WRONG_PAIR]
+    return draw(st.sampled_from(options))
 
 
 @composite
@@ -260,18 +263,19 @@ class InsertQueryComponents:
     table: str
     columns: list[str]
     values: list[str]
+    cursor_format: CursorFormat
 
 
 @composite
 def insert_query_strategy(
-    draw: DrawFn, generated_format: GeneratedFormat | None = None
+    draw: DrawFn, *, wrong_format_pair: bool = False
 ) -> InsertQueryComponents:
     """Generate random valid insert query.
 
     Args:
     ----
         draw: hypothesis draw function
-        generated_format: GeneratedCursor
+        wrong_format_pair: when the cursor and values format should not match
 
     Returns:
     -------
@@ -296,18 +300,23 @@ def insert_query_strategy(
             unique=True,
         )
     )
-    if generated_format is None:
-        generated_format = draw(cursor_formats_generator())
+    format_pair = draw(
+        format_pair_generator(wrong_format_pair=wrong_format_pair)
+    )
     query = draw(
         insert_query_generator(
-            table, columns, values, generated_format.pattern_function
+            table, columns, values, format_pair.pattern_function
         )
     )
-    return InsertQueryComponents(query, table, columns, values)
+    return InsertQueryComponents(
+        query, table, columns, values, format_pair.cursor_format
+    )
 
 
 @composite
-def invalid_insert_query_strategy(draw: DrawFn) -> list[str]:
+def invalid_insert_query_strategy(
+    draw: DrawFn,
+) -> tuple[list[str], CursorFormat]:
     """Generate random invalid insert query.
 
     Args:
@@ -316,24 +325,24 @@ def invalid_insert_query_strategy(draw: DrawFn) -> list[str]:
 
     Returns:
     -------
-        list of invalid insert queries
+        list of invalid insert queries, CursorFormat
 
 
     """
     random_text = draw(st.text(min_size=2, max_size=10))
 
-    valid_insert = draw(insert_query_strategy())
+    valid_components = draw(insert_query_strategy())
 
-    no_table_query = valid_insert.query.replace(valid_insert.table, "")
-    no_values_query = valid_insert.query.split("VALUES")[0]
-    lowercase_query = valid_insert.query.lower()
+    no_table_query = valid_components.query.replace(valid_components.table, "")
+    no_values_query = valid_components.query.split("VALUES")[0]
+    lowercase_query = valid_components.query.lower()
 
     return [
         random_text,
         no_table_query,
         no_values_query,
         lowercase_query,
-    ]
+    ], valid_components.cursor_format
 
 
 @dataclass
@@ -345,7 +354,7 @@ class ParseInsertQueryComponents:
     columns: list[str]
     values: list[str]
     data: pd.DataFrame
-    cursor_formats: CursorFormats
+    cursor_format: CursorFormat
 
 
 @composite
@@ -361,15 +370,11 @@ def parse_insert_strategy(draw: DrawFn) -> ParseInsertQueryComponents:
        ParseInsertQueryComponents
 
     """
-    generated_format = draw(cursor_formats_generator())
-    query_components = draw(
-        insert_query_strategy(generated_format=generated_format)
-    )
+    query_components = draw(insert_query_strategy())
     data = pd.DataFrame({col: [1, 2, 3] for col in query_components.values})
     return ParseInsertQueryComponents(
         **query_components.__dict__,
         data=data,
-        cursor_formats=generated_format.cursor_formats,
     )
 
 
@@ -383,6 +388,7 @@ class RetrieveQueryComponents:
     query: str
     table: str
     columns: list[str]
+    cursor_format: CursorFormat
 
 
 @composite
@@ -431,12 +437,17 @@ def retrieve_query_strategy(draw: DrawFn) -> RetrieveQueryComponents:
         al if has else col
         for (col, al, has) in zip(columns, aliases, has_alias)
     ]
+    format_pair = draw(format_pair_generator())
     query = draw(retrieve_query_generator(table, columns_with_aliases))
-    return RetrieveQueryComponents(query, table, effective_columns)
+    return RetrieveQueryComponents(
+        query, table, effective_columns, format_pair.cursor_format
+    )
 
 
 @composite
-def invalid_retrieve_query_strategy(draw: DrawFn) -> list[str]:
+def invalid_retrieve_query_strategy(
+    draw: DrawFn,
+) -> tuple[list[str], CursorFormat]:
     """Generate random invalid retrieve queries.
 
     Args:
@@ -445,17 +456,22 @@ def invalid_retrieve_query_strategy(draw: DrawFn) -> list[str]:
 
     Returns:
     -------
-       list of invalid retrieve queries
+       list of invalid retrieve queries, CursorFormat
 
     """
     random_text = draw(st.text(min_size=2, max_size=10))
-    valid_retrieve = draw(retrieve_query_strategy())
+    components = draw(retrieve_query_strategy())
 
-    no_table_query = valid_retrieve.query.replace(valid_retrieve.table, "")
-    no_id_query = valid_retrieve.query.replace("id as", "")
-    lowercase_query = valid_retrieve.query.lower()
+    no_table_query = components.query.replace(components.table, "")
+    no_id_query = components.query.replace("id as", "")
+    lowercase_query = components.query.lower()
 
-    return [random_text, no_table_query, no_id_query, lowercase_query]
+    return [
+        random_text,
+        no_table_query,
+        no_id_query,
+        lowercase_query,
+    ], components.cursor_format
 
 
 @dataclass
@@ -466,7 +482,7 @@ class ParseRetrieveQueryComponents:
     table: str
     columns: list[str]
     data: pd.DataFrame
-    cursor_formats: CursorFormats
+    cursor_format: CursorFormat
 
 
 @composite
@@ -482,13 +498,11 @@ def parse_retrieve_strategy(draw: DrawFn) -> ParseRetrieveQueryComponents:
        ParseRetrieveQueryComponents
 
     """
-    generated_format = draw(cursor_formats_generator())
     query_components = draw(retrieve_query_strategy())
     data = pd.DataFrame({col: [1, 2, 3] for col in query_components.columns})
     return ParseRetrieveQueryComponents(
         **query_components.__dict__,
         data=data,
-        cursor_formats=generated_format.cursor_formats,
     )
 
 
@@ -501,6 +515,7 @@ class CompareQueryComponents:
 
     query: str
     columns: list[str]
+    cursor_format: CursorFormat
 
 
 @composite
@@ -526,12 +541,15 @@ def compare_query_strategy(draw: DrawFn) -> CompareQueryComponents:
         )
     )
 
+    format_pair = draw(format_pair_generator())
     query = draw(compare_query_generator(columns))
-    return CompareQueryComponents(query, columns)
+    return CompareQueryComponents(query, columns, format_pair.cursor_format)
 
 
 @composite
-def invalid_compare_query_strategy(draw: DrawFn) -> list[str]:
+def invalid_compare_query_strategy(
+    draw: DrawFn,
+) -> tuple[list[str], CursorFormat]:
     """Generate random invalid compare queries.
 
     Args:
@@ -544,13 +562,18 @@ def invalid_compare_query_strategy(draw: DrawFn) -> list[str]:
 
     """
     random_text = draw(st.text(min_size=2, max_size=10))
-    valid_compare = draw(compare_query_strategy())
+    components = draw(compare_query_strategy())
 
-    no_joins_query = re.sub("JOIN", "", valid_compare.query)
-    no_id_query = valid_compare.query.replace("id", "")
-    lowercase_query = valid_compare.query.lower()
+    no_joins_query = re.sub("JOIN", "", components.query)
+    no_id_query = components.query.replace("id", "")
+    lowercase_query = components.query.lower()
 
-    return [random_text, no_joins_query, no_id_query, lowercase_query]
+    return [
+        random_text,
+        no_joins_query,
+        no_id_query,
+        lowercase_query,
+    ], components.cursor_format
 
 
 @dataclass
@@ -560,7 +583,7 @@ class ParseCompareQueryComponents:
     query: str
     columns: list[str]
     data: pd.DataFrame
-    cursor_formats: CursorFormats
+    cursor_format: CursorFormat
 
 
 @composite
@@ -576,7 +599,6 @@ def parse_compare_strategy(draw: DrawFn) -> ParseCompareQueryComponents:
         ParseCompareQueryComponents
 
     """
-    generated_format = draw(cursor_formats_generator())
     query_components = draw(compare_query_strategy())
     # making sure '_id' does not accidentally show up in column names
     columns = [re.sub("_id", "__", col) for col in query_components.columns]
@@ -584,7 +606,6 @@ def parse_compare_strategy(draw: DrawFn) -> ParseCompareQueryComponents:
     return ParseCompareQueryComponents(
         **query_components.__dict__,
         data=data,
-        cursor_formats=generated_format.cursor_formats,
     )
 
 
@@ -601,21 +622,26 @@ def test_check_insert_query(components: InsertQueryComponents) -> None:
         components: InsertQueryComponents
 
     """
-    assert check_insert_query(components.query, TEST_FORMAT) is None
+    assert (
+        check_insert_query(components.query, components.cursor_format) is None
+    )
 
 
-@given(queries=invalid_insert_query_strategy())
-def test_check_insert_query_raises(queries: list[str]) -> None:
+@given(data=invalid_insert_query_strategy())
+def test_check_insert_query_raises(
+    data: tuple[list[str], CursorFormat],
+) -> None:
     """Test whether invalid insert queries correctly raise exceptions.
 
     Args:
     ----
-        queries: list of invalid queries
+        data: tuple of list of invalid queries, CursorFormat
 
     """
+    queries, cursor_format = data
     for query in queries:
         with pytest.raises(InvalidInsertQueryError):
-            check_insert_query(query, TEST_FORMAT)
+            check_insert_query(query, cursor_format)
 
 
 @given(components=insert_query_strategy())
@@ -628,7 +654,8 @@ def test_get_table_from_insert(components: InsertQueryComponents) -> None:
 
     """
     assert (
-        get_table_from_insert(components.query, TEST_FORMAT) == components.table
+        get_table_from_insert(components.query, components.cursor_format)
+        == components.table
     )
 
 
@@ -642,7 +669,7 @@ def test_get_columns_from_insert(components: InsertQueryComponents) -> None:
 
     """
     assert (
-        get_columns_from_insert(components.query, TEST_FORMAT)
+        get_columns_from_insert(components.query, components.cursor_format)
         == components.columns
     )
 
@@ -663,14 +690,14 @@ def test_get_columns_from_insert_raises(
     wrong_query = re.sub(replace_columns, "", components.query)
 
     with pytest.raises(InvalidInsertQueryError):
-        get_columns_from_insert(wrong_query, TEST_FORMAT)
+        get_columns_from_insert(wrong_query, components.cursor_format)
 
 
-@given(components=insert_query_strategy(generated_format=SQLITE_CURSOR_PAIR))
-def test_get_values_from_insert_sqlite(
+@given(components=insert_query_strategy())
+def test_get_values_from_insert(
     components: InsertQueryComponents,
 ) -> None:
-    """Test whether get_values_from_insert() correctly retrieves columns for SQLite queries.
+    """Test whether get_values_from_insert() correctly retrieves columns.
 
     Args:
     ----
@@ -678,64 +705,24 @@ def test_get_values_from_insert_sqlite(
 
     """
     assert (
-        get_values_from_insert(
-            components.query, SQLITE_VALUES_PATTERN, TEST_FORMAT
-        )
+        get_values_from_insert(components.query, components.cursor_format)
         == components.values
     )
 
 
-@given(components=insert_query_strategy(generated_format=POSTGRES_CURSOR_PAIR))
-def test_get_values_from_insert_sqlite_raises(
+@given(components=insert_query_strategy(wrong_format_pair=True))
+def test_get_values_from_insert_raises(
     components: InsertQueryComponents,
 ) -> None:
-    """Test whether get_values_from_insert() correctly retrieves columns for PostgreSQL queries.
-
-    Args:
-    ----
-        components: InsertQueryComponents (using PostgreSQL format instead)
-
-    """
-    with pytest.raises(InvalidInsertQueryError):
-        get_values_from_insert(
-            components.query, SQLITE_VALUES_PATTERN, TEST_FORMAT
-        )
-
-
-@given(components=insert_query_strategy(generated_format=POSTGRES_CURSOR_PAIR))
-def test_get_values_from_insert_postgres(
-    components: InsertQueryComponents,
-) -> None:
-    """Test whether get_values_from_insert() correctly retrieves columns for SQLite queries.
+    """Test whether get_values_from_insert() correctly throws an exception when formats do not match.
 
     Args:
     ----
         components: InsertQueryComponents
 
     """
-    assert (
-        get_values_from_insert(
-            components.query, POSTGRES_VALUES_PATTERN, TEST_FORMAT
-        )
-        == components.values
-    )
-
-
-@given(components=insert_query_strategy(generated_format=SQLITE_CURSOR_PAIR))
-def test_get_values_from_insert_postgres_raises(
-    components: InsertQueryComponents,
-) -> None:
-    """Test whether get_values_from_insert() correctly retrieves columns for SQLite queries.
-
-    Args:
-    ----
-        components: InsertQueryComponents (using SQLite format instead)
-
-    """
     with pytest.raises(InvalidInsertQueryError):
-        get_values_from_insert(
-            components.query, POSTGRES_VALUES_PATTERN, TEST_FORMAT
-        )
+        get_values_from_insert(components.query, components.cursor_format)
 
 
 @given(components=parse_insert_strategy())
@@ -747,10 +734,10 @@ def test_parse_insert_query(components: ParseInsertQueryComponents) -> None:
         components: ParseInsertQueryComponents
 
     """
-    out = components.columns
+    out = components.columns, components.values
     assert (
         parse_insert_query(
-            components.query, components.data, components.cursor_formats
+            components.query, components.data, components.cursor_format
         )
         == out
     )
@@ -770,7 +757,7 @@ def test_parse_insert_query_raises(
     data = components.data
     data.columns = [f"{col}_" for col in data.columns]
     with pytest.raises(InvalidInsertQueryError):
-        parse_insert_query(components.query, data, components.cursor_formats)
+        parse_insert_query(components.query, data, components.cursor_format)
 
 
 # ---- Testing retrieve query parsing
@@ -786,23 +773,25 @@ def test_check_retrieve_query(components: RetrieveQueryComponents) -> None:
 
     """
     assert (
-        check_retrieve_query(components.query, correct_format=TEST_FORMAT)
-        is None
+        check_retrieve_query(components.query, components.cursor_format) is None
     )
 
 
-@given(queries=invalid_retrieve_query_strategy())
-def test_check_retrieve_query_raises(queries: list[str]) -> None:
+@given(data=invalid_retrieve_query_strategy())
+def test_check_retrieve_query_raises(
+    data: tuple[list[str], CursorFormat],
+) -> None:
     """Test whether invalid retrieve queries correctly raise exceptions.
 
     Args:
     ----
-        queries: list of invalid queries
+        data: list of invalid queries, CursorFormat
 
     """
+    queries, cursor_format = data
     for query in queries:
         with pytest.raises(InvalidRetrieveQueryError):
-            check_retrieve_query(query, TEST_FORMAT)
+            check_retrieve_query(query, cursor_format)
 
 
 @given(components=retrieve_query_strategy())
@@ -815,7 +804,7 @@ def test_get_table_from_retrieve(components: RetrieveQueryComponents) -> None:
 
     """
     assert (
-        get_table_from_retrieve(components.query, TEST_FORMAT)
+        get_table_from_retrieve(components.query, components.cursor_format)
         == components.table
     )
 
@@ -835,7 +824,7 @@ def test_get_table_from_retrieve_raises(
         rf"FROM\s*{components.table}", "FROM ", components.query
     )
     with pytest.raises(InvalidRetrieveQueryError):
-        get_table_from_retrieve(wrong_query, TEST_FORMAT)
+        get_table_from_retrieve(wrong_query, components.cursor_format)
 
 
 @given(components=retrieve_query_strategy())
@@ -848,7 +837,7 @@ def test_get_columns_from_retrieve(components: RetrieveQueryComponents) -> None:
 
     """
     assert (
-        get_columns_from_retrieve(components.query, TEST_FORMAT)
+        get_columns_from_retrieve(components.query, components.cursor_format)
         == components.columns
     )
 
@@ -869,7 +858,7 @@ def test_get_columns_from_retrieve_raises(
         r"\s*SELECT\s*.*\s*FROM", "SELECT FROM", components.query
     )
     with pytest.raises(InvalidRetrieveQueryError):
-        get_columns_from_retrieve(wrong_query, TEST_FORMAT)
+        get_columns_from_retrieve(wrong_query, components.cursor_format)
 
 
 @given(components=parse_retrieve_strategy())
@@ -884,7 +873,7 @@ def test_parse_retrieve_query(components: ParseRetrieveQueryComponents) -> None:
     out = components.columns
     assert (
         parse_retrieve_query(
-            components.query, components.data, components.cursor_formats
+            components.query, components.data, components.cursor_format
         )
         == out
     )
@@ -904,7 +893,7 @@ def test_parse_retrieve_query_raises(
     data = components.data
     data.columns = [f"{col}_" for col in data.columns]
     with pytest.raises(InvalidRetrieveQueryError):
-        parse_retrieve_query(components.query, data, components.cursor_formats)
+        parse_retrieve_query(components.query, data, components.cursor_format)
 
 
 # ---- Testing compare query parsing
@@ -920,23 +909,25 @@ def test_check_compare_query(components: CompareQueryComponents) -> None:
 
     """
     assert (
-        check_compare_query(components.query, correct_format=TEST_FORMAT)
-        is None
+        check_compare_query(components.query, components.cursor_format) is None
     )
 
 
-@given(queries=invalid_compare_query_strategy())
-def test_check_compare_query_raises(queries: list[str]) -> None:
-    """Test whether invalid compare queries correctly raise exceptions.
+@given(data=invalid_compare_query_strategy())
+def test_check_compare_query_raises(
+    data: tuple[list[str], CursorFormat],
+) -> None:
+    """Test whether invalid compare data correctly raise exceptions.
 
     Args:
     ----
-        queries: list of invalid queries
+        data: list of invalid queries
 
     """
+    queries, cursor_format = data
     for query in queries:
         with pytest.raises(InvalidCompareQueryError):
-            check_compare_query(query, TEST_FORMAT)
+            check_compare_query(query, cursor_format)
 
 
 @given(components=parse_compare_strategy())
@@ -950,7 +941,7 @@ def test_parse_compare_query(components: ParseCompareQueryComponents) -> None:
     """
     assert (
         parse_compare_query(
-            components.query, components.data, components.cursor_formats
+            components.query, components.data, components.cursor_format
         )
         is None
     )
@@ -970,4 +961,4 @@ def test_parse_compare_query_raises(
     data = components.data
     data.columns = [f"{col}_id" for col in data.columns]
     with pytest.raises(WrongDatasetPassedError):
-        parse_compare_query(components.query, data, components.cursor_formats)
+        parse_compare_query(components.query, data, components.cursor_format)
