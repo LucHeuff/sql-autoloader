@@ -71,8 +71,10 @@ format_table = {
     "<class 'psycopg.Cursor>'": PostgresFormat,
 }
 
+Cursor = sqlite3.Cursor | psycopg.Cursor
 
-def get_cursor_formats(cursor: sqlite3.Cursor | psycopg.Cursor) -> SQLFormat:
+
+def get_cursor_formats(cursor: Cursor) -> SQLFormat:
     """Get formats for this cursor.
 
     Args:
