@@ -74,8 +74,12 @@ format_table = {
 Cursor = sqlite3.Cursor | psycopg.Cursor
 
 
-def get_cursor_formats(cursor: Cursor) -> SQLFormat:
+# TODO add test for this?
+def get_sql_formats(cursor: Cursor) -> SQLFormat:
     """Get formats for this cursor.
+
+    Essentially a helper function that figures out what database dialect this
+    cursor belongs to and returns the corresponding formats.
 
     Args:
     ----
@@ -83,10 +87,15 @@ def get_cursor_formats(cursor: Cursor) -> SQLFormat:
 
     Returns:
     -------
-        CursorFormat
+        SQLFormat
 
     """
-    return format_table[str(type(cursor))]
+    cursor_type = str(type(cursor))
+    try:
+        return format_table[cursor_type]
+    except KeyError as e:
+        message = f"Unknown cursor type: {cursor_type}. This dialect has not been implemented."
+        raise ValueError(message) from e
 
 
 class RollbackCausedError(Exception):
@@ -160,7 +169,7 @@ class SQLiteCursor:
         if exception:
             self.connection.rollback()
             self.connection.close()
-            raise RollbackCausedError(message)
+            raise RollbackCausedError(message) from exception
         self.connection.commit()
         self.connection.close()
 
@@ -221,6 +230,6 @@ class PostgresCursor:
         if exception:
             self.connection.rollback()
             self.connection.close()
-            raise RollbackCausedError(message)
+            raise RollbackCausedError(message) from exception
         self.connection.commit()
         self.connection.close()
