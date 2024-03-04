@@ -279,8 +279,6 @@ def parse_compare_query(
 
 # ---- Database interface functions
 
-# TODO check of deze nog allemaal naar behoren werken na refactor
-
 
 def _insert(
     cursor: Cursor, query: str, data: pd.DataFrame, values: list[str]
