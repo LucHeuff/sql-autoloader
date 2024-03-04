@@ -6,7 +6,6 @@ import pytest
 
 from etl_components.connections import (
     PostgresCursor,
-    RollbackCausedError,
     SQLiteCursor,
 )
 
@@ -68,9 +67,7 @@ def test_sqlite_cursor_exception() -> None:
         cursor.execute(create)
         cursor.executemany(insert, pass_data.to_dict("records"))
     # trying to add fail data but running into an error
-    with pytest.raises(RollbackCausedError), SQLiteCursor(
-        SQLITE_FILE
-    ) as cursor:
+    with pytest.raises(ValueError), SQLiteCursor(SQLITE_FILE) as cursor:
         cursor.executemany(insert, fail_data.to_dict("records"))
         raise ValueError("An error occurs.")
 
@@ -138,7 +135,7 @@ def test_postgres_cursor_exception() -> None:
         cursor.execute(create)
         cursor.executemany(insert, pass_data.to_dict("records"))
     # trying to add fail data but running into an error
-    with pytest.raises(RollbackCausedError), PostgresCursor() as cursor:
+    with pytest.raises(ValueError), PostgresCursor() as cursor:
         cursor.executemany(insert, fail_data.to_dict("records"))
         raise ValueError("An error occurs.")
     # checking if rollback was correctly performed

@@ -98,12 +98,6 @@ def get_sql_format(cursor: Cursor) -> SQLFormat:
     return None
 
 
-class RollbackCausedError(Exception):
-    """Exception raised when the PostgresCursor catches and runs a rollback."""
-
-    pass
-
-
 def _dict_row(cursor: sqlite3.Cursor, row: tuple[Any, ...]) -> dict:
     """Row Factory that converts SQLite output into dictionaries.
 
@@ -169,9 +163,9 @@ class SQLiteCursor:
         if exception:
             self.connection.rollback()
             self.connection.close()
-            raise RollbackCausedError(message) from exception
-        self.connection.commit()
-        self.connection.close()
+        else:
+            self.connection.commit()
+            self.connection.close()
 
 
 class PostgresCursor:
@@ -230,6 +224,6 @@ class PostgresCursor:
         if exception:
             self.connection.rollback()
             self.connection.close()
-            raise RollbackCausedError(message) from exception
-        self.connection.commit()
-        self.connection.close()
+        else:
+            self.connection.commit()
+            self.connection.close()
