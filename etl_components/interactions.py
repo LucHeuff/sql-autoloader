@@ -1,5 +1,6 @@
 import re
 from dataclasses import dataclass
+from io import StringIO
 
 import pandas as pd
 
@@ -37,6 +38,12 @@ class InvalidCompareQueryError(Exception):
 
 class WrongDatasetPassedError(Exception):
     """Exception for when the wrong dataset is passed into compare()."""
+
+    pass
+
+
+class CopyNotAvailableError(Exception):
+    """Exception when the user tries insert with use_copy=True when COPY is not supported."""
 
     pass
 
@@ -297,14 +304,31 @@ def _insert(
     cursor.executemany(query, data.to_dict("records"))  # type: ignore
 
 
-# TODO optie toevoegen om via COPY data in te voegen
 def _insert_with_copy(
-    cursor: PostgresCursor, query: str, data: pd.DataFrame, values: list[str]
+    cursor: PostgresCursor, data: pd.DataFrame, parts: QueryParts
 ) -> None:
-    pass
+    data = (
+        data[parts.values]
+        .drop_duplicates()
+        .rename(columns=dict(zip(parts.values, parts.columns)))
+    )  # type: ignore
+
+    columns_section = ", ".join(parts.columns)
+
+    query = f"COPY {parts.table} ({columns_section}) FROM STDIN (FORMAT CSV, DELIMITER ',')"
+
+    # storing into memory that pretends to be a CSV
+    string_io = StringIO()
+    string_io.write(data.to_csv(index=False, header=False, sep=","))
+    string_io.seek(0)
+
+    with cursor.copy(query) as copy:  # type: ignore
+        copy.write(string_io.read())
 
 
-def insert(cursor: Cursor, query: str, data: pd.DataFrame) -> None:
+def insert(
+    cursor: Cursor, query: str, data: pd.DataFrame, *, use_copy: bool = False
+) -> None:
     """Insert data into database.
 
     Args:
@@ -315,12 +339,23 @@ def insert(cursor: Cursor, query: str, data: pd.DataFrame) -> None:
             VALUES (...) # depending on sqlite or psycopg connection
             ...
         data: to be inserted into the database
+        use_copy: whether to use COPY if the cursor supports this.
+            NOTE: regular queries will be translated to COPY,
+            but consistent behaviour is not guaranteed. Use at your own risk.
+
+    Raises:
+    ------
+        CopyNotAvailableError: when use_copy is called but not supported for cursor.
 
     """
     sql_format = get_sql_format(cursor)
     parts = parse_insert_query(query, data, sql_format)
-
-    _insert(cursor, query, data, parts.values)
+    if sql_format.copy_available and use_copy:
+        _insert_with_copy(cursor, data, parts)  # type: ignore
+    elif not sql_format.copy_available and use_copy:
+        raise CopyNotAvailableError(sql_format.copy_format)
+    else:
+        _insert(cursor, query, data, parts.values)
 
 
 def _retrieve(

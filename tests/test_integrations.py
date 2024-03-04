@@ -1,9 +1,13 @@
 import pandas as pd
+import pytest
 
 from etl_components.connections import PostgresCursor, SQLiteCursor
-from etl_components.interactions import compare, insert, insert_and_retrieve_ids
-
-SQLITE_FILE = "integrate.db"
+from etl_components.interactions import (
+    CopyNotAvailableError,
+    compare,
+    insert,
+    insert_and_retrieve_ids,
+)
 
 DATA = pd.DataFrame(
     {
@@ -141,3 +145,64 @@ def test_integration_postgres() -> None:
         )
         insert(cursor, insert_voertuig_kleur, data)
         compare(cursor, compare_query, orig_data)
+
+
+def test_sqlite_copy_raises() -> None:
+    """Test whether calling a SQLiteCursor with use_copy raises an exception."""
+    create_vliegtuig = """
+    CREATE TABLE vliegtuig (
+        id SERIAL PRIMARY KEY,
+        naam TEXT UNIQUE
+    )
+    """
+    insert_vliegtuig = """INSERT INTO vliegtuig (naam) VALUES (:vliegtuig)
+    ON CONFLICT DO NOTHING
+    """
+    data = pd.DataFrame(
+        {
+            "vliegtuig": ["Boeing", "Airbus", "Bombardier", "Embraer"],
+        }
+    )
+
+    with pytest.raises(CopyNotAvailableError):  # noqa: SIM117
+        with SQLiteCursor() as cursor:
+            cursor.execute(create_vliegtuig)
+            insert(cursor, insert_vliegtuig, data, use_copy=True)
+
+
+def test_postgres_copy() -> None:
+    """Test whether inserting with copy works as intended."""
+    create_vliegtuig = """
+    CREATE TABLE vliegtuig (
+        id SERIAL PRIMARY KEY,
+        naam TEXT UNIQUE
+    )
+    """
+    insert_vliegtuig = """INSERT INTO vliegtuig (naam) VALUES (%(vliegtuig)s)
+    ON CONFLICT DO NOTHING
+    """
+    data = pd.DataFrame(
+        {
+            "vliegtuig": ["Boeing", "Airbus", "Bombardier", "Embraer"],
+        }
+    )
+
+    with PostgresCursor() as cursor:
+        cursor.execute(create_vliegtuig)
+        insert(cursor, insert_vliegtuig, data, use_copy=True)
+        cursor.execute("SELECT naam as vliegtuig FROM vliegtuig")
+        test = pd.DataFrame(cursor.fetchall())
+
+        pd.testing.assert_frame_equal(data, test, check_like=True)
+
+
+def setup() -> None:
+    """Remove database stuff before tests have run."""
+    with PostgresCursor() as cursor:
+        cursor.execute("DROP owned by test_user")
+
+
+def teardown() -> None:
+    """Remove database stuff after tests have run."""
+    with PostgresCursor() as cursor:
+        cursor.execute("DROP owned by test_user")

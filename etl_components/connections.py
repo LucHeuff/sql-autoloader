@@ -16,11 +16,16 @@ SQLITE_INSERT_FORMAT = """
 """
 SQLITE_VALUES_FORMAT = r":(\w+)"
 
+
 POSTGRES_INSERT_FORMAT = """
     INSERT INTO <table> (<column1>, <column2>, ...)
     VALUES (%(<column1_source>)s, %(<column2_source>)s, ...)
 """
 POSTGRES_VALUES_FORMAT = r"%\((\w+)\)s"
+POSTGRES_COPY_FORMAT = """
+    COPY <table> (<column1_source>, <column2_source>, ...)
+(FROM is not necessary, this is taken care of for you 😊)
+"""
 
 # SQLite and PostgreSQL use the same format for retrieval
 RETRIEVE_FORMAT = """
@@ -37,6 +42,7 @@ COMPARE_FORMAT = """
         JOIN ...
     ...
 """
+NO_COPY_FORMAT = "COPY not available for this cursor."
 
 
 @dataclass
@@ -45,6 +51,8 @@ class SQLFormat:
 
     insert_format: str
     values_pattern: str
+    copy_available: bool
+    copy_format: str
     retrieve_format: str = RETRIEVE_FORMAT
     compare_format: str = COMPARE_FORMAT
 
@@ -58,6 +66,8 @@ class SQLiteFormat(SQLFormat):
         super().__init__(
             insert_format=SQLITE_INSERT_FORMAT,
             values_pattern=SQLITE_VALUES_FORMAT,
+            copy_available=False,
+            copy_format=NO_COPY_FORMAT,
         )
 
 
@@ -70,6 +80,8 @@ class PostgresFormat(SQLFormat):
         super().__init__(
             insert_format=POSTGRES_INSERT_FORMAT,
             values_pattern=POSTGRES_VALUES_FORMAT,
+            copy_available=True,
+            copy_format=POSTGRES_COPY_FORMAT,
         )
 
 
