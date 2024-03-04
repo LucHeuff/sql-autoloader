@@ -73,12 +73,6 @@ class PostgresFormat(SQLFormat):
         )
 
 
-# HACK see if I can make this better somehow, but it works for now
-format_table = {
-    "<class 'sqlite3.Cursor>'": SQLiteFormat(),
-    "<class 'psycopg.Cursor>'": PostgresFormat(),
-}
-
 Cursor = sqlite3.Cursor | psycopg.Cursor
 
 
@@ -97,12 +91,11 @@ def get_sql_format(cursor: Cursor) -> SQLFormat:
         SQLFormat
 
     """
-    cursor_type = str(type(cursor))
-    try:
-        return format_table[cursor_type]
-    except KeyError as e:
-        message = f"Unknown cursor type: {cursor_type}. This dialect has not been implemented."
-        raise ValueError(message) from e
+    if isinstance(cursor, sqlite3.Cursor):
+        return SQLiteFormat()
+    if isinstance(cursor, psycopg.Cursor):
+        return PostgresFormat()
+    return None
 
 
 class RollbackCausedError(Exception):
