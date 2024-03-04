@@ -10,24 +10,21 @@ from hypothesis import given
 from hypothesis.strategies import DrawFn, composite
 
 from etl_components.connections import (
-    CursorFormat,
-    postgres_formats,
-    sqlite_formats,
+    PostgresFormat,
+    SQLFormat,
+    SQLiteFormat,
 )
 from etl_components.interactions import (
+    InsertAndRetrieveParts,
     InvalidCompareQueryError,
+    InvalidInsertAndRetrieveQueryError,
     InvalidInsertQueryError,
     InvalidRetrieveQueryError,
+    QueryParts,
     WrongDatasetPassedError,
-    check_compare_query,
-    check_insert_query,
-    check_retrieve_query,
-    get_columns_from_insert,
-    get_columns_from_retrieve,
-    get_table_from_insert,
-    get_table_from_retrieve,
-    get_values_from_insert,
+    check_columns_in_data,
     parse_compare_query,
+    parse_insert_and_retrieve_query,
     parse_insert_query,
     parse_retrieve_query,
 )
@@ -42,7 +39,7 @@ pattern_fn = Callable[[str], str]
 
 
 @composite
-def table_name_generator(draw: DrawFn) -> str:
+def table_generator(draw: DrawFn) -> str:
     """Generate a random table name.
 
     Args:
@@ -60,7 +57,7 @@ def table_name_generator(draw: DrawFn) -> str:
 
 
 @composite
-def column_name_generator(draw: DrawFn) -> str:
+def columns_generator(draw: DrawFn, size: int) -> list[str]:
     """Generate a random column name.
 
     Args:
@@ -74,24 +71,38 @@ def column_name_generator(draw: DrawFn) -> str:
 
     """
     return draw(
-        st.text(alphabet=string.ascii_lowercase + "_", min_size=4, max_size=10)
+        st.lists(
+            st.text(
+                alphabet=string.ascii_lowercase + "_", min_size=4, max_size=10
+            ),
+            min_size=size,
+            max_size=size,
+            unique=True,
+        )
     )
 
 
 @composite
-def gap_generator(draw: DrawFn) -> str:
+def gaps_generator(draw: DrawFn, size: int) -> list[str]:
     """Generate a random whitespace gap.
 
     Args:
     ----
         draw: hypothesis draw function
+        size: number of whitespace elements to generate
 
     Returns:
     -------
         gap as a atring
 
     """
-    return draw(st.text(string.whitespace, min_size=1, max_size=3))
+    return draw(
+        st.lists(
+            st.text(string.whitespace, min_size=1, max_size=3),
+            min_size=size,
+            max_size=size,
+        )
+    )
 
 
 def postgres_value_pattern(column: str) -> str:
@@ -128,15 +139,15 @@ def sqlite_value_pattern(column: str) -> str:
 class FormatPair:
     """Encapsulates cursor_formats_generator() output."""
 
-    cursor_format: CursorFormat
-    pattern_function: pattern_fn
+    sql_format: SQLFormat
+    values_pattern_function: pattern_fn
 
 
-POSTGRES_FORMAT_PAIR = FormatPair(postgres_formats, postgres_value_pattern)
-SQLITE_FORMAT_PAIR = FormatPair(sqlite_formats, sqlite_value_pattern)
+POSTGRES_FORMAT_PAIR = FormatPair(PostgresFormat(), postgres_value_pattern)
+SQLITE_FORMAT_PAIR = FormatPair(SQLiteFormat(), sqlite_value_pattern)
 
-POSTGRES_WRONG_PAIR = FormatPair(postgres_formats, sqlite_value_pattern)
-SQLITE_WRONG_PAIR = FormatPair(sqlite_formats, postgres_value_pattern)
+POSTGRES_WRONG_PAIR = FormatPair(PostgresFormat(), sqlite_value_pattern)
+SQLITE_WRONG_PAIR = FormatPair(SQLiteFormat(), postgres_value_pattern)
 
 
 @composite
@@ -162,162 +173,80 @@ def format_pair_generator(
 
 
 @composite
-def insert_query_generator(
-    draw: DrawFn,
-    table: str,
-    columns: list[str],
-    values: list[str],
-    values_pattern_function: pattern_fn,
-) -> str:
-    """Generate a valid insert query.
+def insert_query_generator(draw: DrawFn) -> str:
+    """Generate insert query with table, columns and values placeholders.
 
     Args:
     ----
         draw: hypothesis draw function
-        table: table name
-        columns: column names
-        values: value names
-        values_pattern_function: that transforms values to correct format
 
     Returns:
     -------
-        insert query as a string
+        query string with <table>, <columns> and <values> placeholders
 
     """
-    w = draw(st.lists(gap_generator(), min_size=6, max_size=6))
-    end_noise = draw(
-        st.text(alphabet=string.ascii_uppercase, min_size=0, max_size=10)
+    pattern = (
+        r"^\s+INSERT INTO\s+<table>\s+\(<columns>\)\s+VALUES\s+\(<values>\)"
     )
-    column_names = ", ".join(columns)
-    value_names = ", ".join(values_pattern_function(val) for val in values)
-    return f"{w[0]}INSERT INTO{w[1]}{table}{w[2]}({column_names}){w[3]}VALUES{w[4]}({value_names}){w[5]}{end_noise}"
+    return draw(st.from_regex(pattern))
 
 
 @composite
-def retrieve_query_generator(
-    draw: DrawFn, table: str, columns: list[str]
-) -> str:
-    """Generate a valid retrieve query.
+def retrieve_query_generator(draw: DrawFn) -> str:
+    """Generate retrieve query with table and columns placeholders.
 
     Args:
     ----
         draw: hypothesis draw function
-        table: table name
-        columns: column names (optionally with aliases)
 
     Returns:
     -------
-        retrieve query as string
+        query string with <table> and <columns> placeholders
+
 
     """
-    w = draw(st.lists(gap_generator(), min_size=5, max_size=5))
-    column_names = ", ".join(columns)
-    return f"{w[0]}SELECT{w[1]}id as {table}_id, {column_names}{w[2]}FROM{w[3]}{table}"
+    pattern = r"^\s+SELECT\s+id as <table>_id, <columns>\s+FROM\s+<table>\s+$"
+    return draw(st.from_regex(pattern))
 
 
 @composite
-def compare_query_generator(draw: DrawFn, columns: list[str]) -> str:
-    """Generate a valid compare query.
+def compare_query_generator(draw: DrawFn, n_tables: int) -> str:
+    """Generate compare query with tables and columns placeholders.
 
     Args:
     ----
         draw: hypothesis draw function
-        columns: columns to be compared
+        n_tables: number of tables in the query
 
     Returns:
     -------
-       compare query as string
+        query string with <table{n}> and <columns> placeholders
 
     """
-    n = len(columns)
-    w = draw(st.lists(gap_generator(), min_size=5, max_size=5))
-    tables = draw(
-        st.lists(table_name_generator(), min_size=n, max_size=n, unique=True)
-    )
-    dotted = draw(st.lists(st.booleans(), min_size=n, max_size=n))
-
-    select_section = f"{w[0]}SELECT{w[1]}"
-    dotted_columns = [
-        f"{table}.{column}" if dot else f"{column}"
-        for (table, column, dot) in zip(columns, tables, dotted)
+    select_pattern = r"^\s+SELECT\s+<columns>\s+FROM <table0>\s+"
+    join_patterns = [
+        rf"JOIN <table{n+1}> ON <table{n+1}>\.<table{n}>_id = <table{n}>\.id\s+"
+        for n in range(n_tables - 1)
     ]
-    columns_section = ", ".join(dotted_columns)
-    from_section = f"{w[2]}FROM {tables[0]}{w[3]}"
-    joins = [
-        f"\tJOIN {table2} ON {table2}.{table1}_id = {table1}.id"
-        for (table1, table2) in zip(tables[:-1], tables[1:])
-    ]
-    joins_section = "\n".join(joins) + f"{w[4]}"
-
-    return select_section + columns_section + from_section + joins_section
+    pattern = select_pattern + "".join(join_patterns)
+    return draw(st.from_regex(pattern))
 
 
 # ---- Strategies
 
 
 @dataclass
-class InsertQueryComponents:
-    """Encapsulates insert_query_strategy() outputs."""
+class CheckColumnsComponents:
+    """Encapsulates columns_in_data_strategy() output."""
 
-    query: str
-    table: str
     columns: list[str]
-    values: list[str]
-    cursor_format: CursorFormat
+    data: pd.DataFrame
+    correct: bool
 
 
 @composite
-def insert_query_strategy(
-    draw: DrawFn, *, wrong_format_pair: bool = False
-) -> InsertQueryComponents:
-    """Generate random valid insert query.
-
-    Args:
-    ----
-        draw: hypothesis draw function
-        wrong_format_pair: when the cursor and values format should not match
-
-    Returns:
-    -------
-        InsertQueryComponents
-
-    """
-    table = draw(table_name_generator())
-    num_columns = draw(st.integers(min_value=1, max_value=5))
-    columns = draw(
-        st.lists(
-            column_name_generator(),
-            min_size=num_columns,
-            max_size=num_columns,
-            unique=True,
-        )
-    )
-    values = draw(
-        st.lists(
-            column_name_generator(),
-            min_size=num_columns,
-            max_size=num_columns,
-            unique=True,
-        )
-    )
-    format_pair = draw(
-        format_pair_generator(wrong_format_pair=wrong_format_pair)
-    )
-    query = draw(
-        insert_query_generator(
-            table, columns, values, format_pair.pattern_function
-        )
-    )
-    return InsertQueryComponents(
-        query, table, columns, values, format_pair.cursor_format
-    )
-
-
-@composite
-def invalid_insert_query_strategy(
-    draw: DrawFn,
-) -> tuple[list[str], CursorFormat]:
-    """Generate random invalid insert query.
+def columns_in_data_strategy(draw: DrawFn) -> CheckColumnsComponents:
+    """Generate columns, data and correctness for check_columns_in_data().
 
     Args:
     ----
@@ -325,41 +254,30 @@ def invalid_insert_query_strategy(
 
     Returns:
     -------
-        list of invalid insert queries, CursorFormat
-
+        CheckColumnsComponents
 
     """
-    random_text = draw(st.text(min_size=2, max_size=10))
-
-    valid_components = draw(insert_query_strategy())
-
-    no_table_query = valid_components.query.replace(valid_components.table, "")
-    no_values_query = valid_components.query.split("VALUES")[0]
-    lowercase_query = valid_components.query.lower()
-
-    return [
-        random_text,
-        no_table_query,
-        no_values_query,
-        lowercase_query,
-    ], valid_components.cursor_format
+    n = draw(st.integers(min_value=1, max_value=10))
+    correct = draw(st.booleans())
+    columns = draw(columns_generator(n))
+    data_columns = columns if correct else [f"{col}_" for col in columns]
+    data = pd.DataFrame({col: [1, 2] for col in data_columns})
+    return CheckColumnsComponents(columns, data, correct)
 
 
 @dataclass
-class ParseInsertQueryComponents:
-    """Encapsulates parse_insert_strategy() outputs."""
+class ParseInsertComponents:
+    """Encapsulates output from parse_insert_strategy."""
 
     query: str
-    table: str
-    columns: list[str]
-    values: list[str]
     data: pd.DataFrame
-    cursor_format: CursorFormat
+    sql_format: SQLFormat
+    parts: QueryParts
 
 
 @composite
-def parse_insert_strategy(draw: DrawFn) -> ParseInsertQueryComponents:
-    """Generate examples for parse_insert_query().
+def parse_insert_query_strategy(draw: DrawFn) -> ParseInsertComponents:
+    """Generate a valid insert query and its parts.
 
     Args:
     ----
@@ -367,14 +285,114 @@ def parse_insert_strategy(draw: DrawFn) -> ParseInsertQueryComponents:
 
     Returns:
     -------
-       ParseInsertQueryComponents
+        ParseInsertQueryComponents
 
     """
-    query_components = draw(insert_query_strategy())
-    data = pd.DataFrame({col: [1, 2, 3] for col in query_components.values})
-    return ParseInsertQueryComponents(
-        **query_components.__dict__,
-        data=data,
+    # Generating query parts
+    table = draw(table_generator())
+    n_columns = draw(st.integers(min_value=1, max_value=5))
+    columns = draw(columns_generator(n_columns))
+    values = draw(columns_generator(n_columns))
+    format_pair = draw(format_pair_generator())
+
+    parts = QueryParts(table, columns, values)
+
+    # translating parts to the right format
+    columns_section = ", ".join(columns)
+    values_section = ", ".join(
+        format_pair.values_pattern_function(val) for val in values
+    )
+
+    # generating query
+    query = (
+        draw(insert_query_generator())
+        .replace("<table>", table)
+        .replace("<columns>", columns_section)
+        .replace("<values>", values_section)
+    )
+
+    data = pd.DataFrame({col: [1] for col in values})
+
+    return ParseInsertComponents(query, data, format_pair.sql_format, parts)
+
+
+@dataclass
+class ParseInvalidInsertComponents:
+    """Encapsulates parse_invalid_insert_strategy() outputs."""
+
+    query: str
+    data: pd.DataFrame
+    sql_format: SQLFormat
+    wrong: list[str]
+
+
+@composite
+def parse_invalid_insert_query_strategy(
+    draw: DrawFn,
+) -> ParseInvalidInsertComponents:
+    """Generate invalid insert query or data.
+
+    Args:
+    ----
+        draw: hypothesis draw function
+
+    Returns:
+    -------
+        ParseInvalidInsertQueryComponents
+
+    """
+    # Generating query parts
+    table = draw(table_generator())
+    # at least 2 columns, otherwise problems with columns are indistinguishable
+    n_columns = draw(st.integers(min_value=2, max_value=5))
+    columns = draw(columns_generator(n_columns))
+    values = draw(columns_generator(n_columns))
+
+    # generating what is wrong
+    wrong_options = ["table", "columns", "values", "data", "format", "lower"]
+    wrong = draw(
+        st.lists(
+            st.sampled_from(wrong_options),
+            min_size=1,
+            max_size=len(wrong_options),
+            unique=True,
+        )
+    )
+    # generating format pair (which may be wrong)
+    format_pair = draw(
+        format_pair_generator(wrong_format_pair=("format" in wrong))
+    )
+
+    # translating parts to the right (or wrong) format
+    table_section = "" if ("table" in wrong) else table
+    columns_section = "" if ("columns" in wrong) else ", ".join(columns)
+    values_section = (
+        ""
+        if ("values" in wrong)
+        else ", ".join(
+            format_pair.values_pattern_function(val) for val in values
+        )
+    )
+
+    # generating query and replacing
+    query = draw(insert_query_generator())
+    query = (
+        query.replace("<table>", table_section)
+        .replace("<columns>", columns_section)
+        .replace("<values>", values_section)
+    )
+    # to lowercase if required
+    if "lower" in wrong:
+        query = query.lower()
+
+    # generating (wrong) data
+    if "data" in wrong:
+        data = pd.DataFrame({f"{col}_": [1] for col in values})
+    else:
+        data = pd.DataFrame({col: [1] for col in values})
+
+    return ParseInvalidInsertComponents(
+        query, data, format_pair.sql_format, wrong
     )
 
 
@@ -382,18 +400,18 @@ def parse_insert_strategy(draw: DrawFn) -> ParseInsertQueryComponents:
 
 
 @dataclass
-class RetrieveQueryComponents:
-    """Encapsulates output from retrieve_query_strategy()."""
+class ParseRetrieveComponents:
+    """Encapsulates parse_retrieve_query_strategy() outputs."""
 
     query: str
-    table: str
-    columns: list[str]
-    cursor_format: CursorFormat
+    data: pd.DataFrame
+    sql_format: SQLFormat
+    parts: QueryParts
 
 
 @composite
-def retrieve_query_strategy(draw: DrawFn) -> RetrieveQueryComponents:
-    """Generate a random valid retrieve query.
+def parse_retrieve_query_strategy(draw: DrawFn) -> ParseRetrieveComponents:
+    """Generate a valid retrieve query and its parts.
 
     Args:
     ----
@@ -401,126 +419,284 @@ def retrieve_query_strategy(draw: DrawFn) -> RetrieveQueryComponents:
 
     Returns:
     -------
-        RetrieveQueryComponents
+        ParseRetrieveQueryComponents
 
     """
-    table = draw(table_name_generator())
-    num_columns = draw(st.integers(min_value=1, max_value=5))
-    # generate whether each column has an alias
+    table = draw(table_generator())
+    n_columns = draw(st.integers(min_value=2, max_value=5))
+    columns = draw(columns_generator(n_columns))
+    values = draw(columns_generator(n_columns))
     has_alias = draw(
-        st.lists(st.booleans(), min_size=num_columns, max_size=num_columns)
+        st.lists(st.booleans(), min_size=n_columns, max_size=n_columns)
     )
-    # generating columns and aliases
-    columns = draw(
-        st.lists(
-            column_name_generator(),
-            min_size=num_columns,
-            max_size=num_columns,
-            unique=True,
-        )
-    )
-    aliases = draw(
-        st.lists(
-            column_name_generator(),
-            min_size=num_columns,
-            max_size=num_columns,
-            unique=True,
-        )
-    )
-    # weaving aliases into SQL string
-    columns_with_aliases = [
-        f"{col} as {al}" if has else col
-        for (col, al, has) in zip(columns, aliases, has_alias)
-    ]
-    # weaving out which name is at the end
-    effective_columns = [
-        al if has else col
-        for (col, al, has) in zip(columns, aliases, has_alias)
-    ]
+
+    # generating format pair
     format_pair = draw(format_pair_generator())
-    query = draw(retrieve_query_generator(table, columns_with_aliases))
-    return RetrieveQueryComponents(
-        query, table, effective_columns, format_pair.cursor_format
+
+    columns_with_aliases = [
+        f"{col} as {val}" if has else col
+        for (col, val, has) in zip(columns, values, has_alias)
+    ]
+    columns_section = ", ".join(columns_with_aliases)
+    # making sure values also follow the alias format
+    values = [
+        val if has else col
+        for (col, val, has) in zip(columns, values, has_alias)
+    ]
+
+    parts = QueryParts(table, columns, values)
+
+    query = (
+        draw(retrieve_query_generator())
+        .replace("<table>", table)
+        .replace("<columns>", columns_section)
     )
 
+    data = pd.DataFrame({col: [1] for col in values})
 
-@composite
-def invalid_retrieve_query_strategy(
-    draw: DrawFn,
-) -> tuple[list[str], CursorFormat]:
-    """Generate random invalid retrieve queries.
-
-    Args:
-    ----
-        draw: hypothesis draw function
-
-    Returns:
-    -------
-       list of invalid retrieve queries, CursorFormat
-
-    """
-    random_text = draw(st.text(min_size=2, max_size=10))
-    components = draw(retrieve_query_strategy())
-
-    no_table_query = components.query.replace(components.table, "")
-    no_id_query = components.query.replace("id as", "")
-    lowercase_query = components.query.lower()
-
-    return [
-        random_text,
-        no_table_query,
-        no_id_query,
-        lowercase_query,
-    ], components.cursor_format
+    return ParseRetrieveComponents(query, data, format_pair.sql_format, parts)
 
 
 @dataclass
-class ParseRetrieveQueryComponents:
-    """Encapsulates parse_retrieve_strategy() outputs."""
+class ParseInvalidRetrieveComponents:
+    """Encapsulates parse_invalid_retrieve_query_strategy() outputs."""
 
     query: str
-    table: str
-    columns: list[str]
     data: pd.DataFrame
-    cursor_format: CursorFormat
+    sql_format: SQLFormat
+    wrong: list[str]
 
 
 @composite
-def parse_retrieve_strategy(draw: DrawFn) -> ParseRetrieveQueryComponents:
-    """Generate examples for parse_retrieve_query().
+def parse_invalid_retrieve_query_strategy(
+    draw: DrawFn,
+) -> ParseInvalidRetrieveComponents:
+    """Generate invalid retrieve query or data.
 
     Args:
     ----
-        draw: hypothesis draw function.
+        draw: hypothesis draw function
 
     Returns:
     -------
-       ParseRetrieveQueryComponents
+        ParseInvalidRetrieveQueryComponents
 
     """
-    query_components = draw(retrieve_query_strategy())
-    data = pd.DataFrame({col: [1, 2, 3] for col in query_components.columns})
-    return ParseRetrieveQueryComponents(
-        **query_components.__dict__,
-        data=data,
+    # Generating query parts
+    table = draw(table_generator())
+    # at least 2 columns, otherwise problems with columns are indistinguishable
+    n_columns = draw(st.integers(min_value=2, max_value=5))
+    columns = draw(columns_generator(n_columns))
+    values = draw(columns_generator(n_columns))
+    has_alias = draw(
+        st.lists(st.booleans(), min_size=n_columns, max_size=n_columns)
+    )
+    format_pair = draw(format_pair_generator())
+
+    # generating what is wrong
+    wrong_options = ["no_table", "no_table_match", "columns", "data", "lower"]
+    wrong = draw(
+        st.lists(
+            st.sampled_from(wrong_options),
+            min_size=1,
+            max_size=len(wrong_options),
+            unique=True,
+        )
+    )
+
+    # translating parts to the right (or wrong) format
+    table_section = "" if ("no_table" in wrong) else table
+    if "columns" in wrong:
+        columns_section = ""
+    else:
+        # doing columns the correct way with optional aliases
+        columns_with_aliases = [
+            f"{col} as {val}" if has else col
+            for (col, val, has) in zip(columns, values, has_alias)
+        ]
+        columns_section = ", ".join(columns_with_aliases)
+        # making sure values also follow the alias format
+        values = [
+            val if has else col
+            for (col, val, has) in zip(columns, values, has_alias)
+        ]
+
+    # generating query and replacing
+    query = draw(retrieve_query_generator())
+    query = query.replace("<table>", table_section).replace(
+        "<columns>", columns_section
+    )
+    if "no_table_match" in wrong:
+        query = re.sub(rf"FROM\s+{table}", f"FROM {table}_", query)
+
+    if "lower" in wrong:
+        query = query.lower()
+
+    if "data" in wrong:
+        data = pd.DataFrame({f"{col}_": [1] for col in values})
+    else:
+        data = pd.DataFrame({col: [1] for col in values})
+
+    return ParseInvalidRetrieveComponents(
+        query, data, format_pair.sql_format, wrong
+    )
+
+
+# ---- insert and retrieve strategies
+@dataclass
+class ParseInsertAndRetrieveComponents:
+    """Encapsulates parse_insert_and_retrieve_strategy() outputs."""
+
+    insert_query: str
+    retrieve_query: str
+    data: pd.DataFrame
+    sql_format: SQLFormat
+    parts: InsertAndRetrieveParts
+
+
+@composite
+def parse_insert_and_retrieve_query_strategy(
+    draw: DrawFn,
+) -> ParseInsertAndRetrieveComponents:
+    """Generate valid insert and retrieve queries and their parts.
+
+    Args:
+    ----
+        draw: hypothesis draw function
+
+    Returns:
+    -------
+        ParseInsertAndRetrieveComponents
+
+    """
+    table = draw(table_generator())
+    n_columns = draw(st.integers(min_value=2, max_value=5))
+    columns = draw(columns_generator(n_columns))
+    values = draw(columns_generator(n_columns))
+    format_pair = draw(format_pair_generator())
+
+    parts = InsertAndRetrieveParts(values, values)
+
+    insert_columns = ", ".join(columns)
+    insert_values = ", ".join(
+        format_pair.values_pattern_function(val) for val in values
+    )
+    retrieve_columns = ", ".join(
+        f"{col} as {val}" for (col, val) in zip(columns, values)
+    )
+
+    insert_query = (
+        draw(insert_query_generator())
+        .replace("<table>", table)
+        .replace("<columns>", insert_columns)
+        .replace("<values>", insert_values)
+    )
+
+    retrieve_query = (
+        draw(retrieve_query_generator())
+        .replace("<table>", table)
+        .replace("<columns>", retrieve_columns)
+    )
+
+    data = pd.DataFrame({col: [1] for col in values})
+
+    return ParseInsertAndRetrieveComponents(
+        insert_query, retrieve_query, data, format_pair.sql_format, parts
+    )
+
+
+@dataclass
+class ParseInvalidInsertAndRetrieveComponents:
+    """Encapsulates parse_invalid_insert_and_retrieve_query_strategy() outputs."""
+
+    insert_query: str
+    retrieve_query: str
+    data: pd.DataFrame
+    sql_format: SQLFormat
+    wrong: list[str]
+
+
+@composite
+def parse_invalid_insert_and_retrieve_query_strategy(
+    draw: DrawFn,
+) -> ParseInvalidInsertAndRetrieveComponents:
+    """Generate invalid insert and retrieve combination.
+
+    Args:
+    ----
+        draw: hypothesis draw function
+
+    Returns:
+    -------
+        ParseInvalidInsertAndRetrieveComponents
+
+    """
+    table = draw(table_generator())
+    # at least 2 columns, otherwise problems with columns are indistinguishable
+    n_columns = draw(st.integers(min_value=2, max_value=5))
+    columns = draw(columns_generator(n_columns))
+    values = draw(columns_generator(n_columns))
+    format_pair = draw(format_pair_generator())
+
+    # generating what is going wrong
+    wrong_options = ["tables", "columns"]
+    wrong = draw(
+        st.lists(
+            st.sampled_from(wrong_options),
+            min_size=1,
+            max_size=len(wrong_options),
+            unique=True,
+        )
+    )
+
+    insert_columns = ", ".join(columns)
+    insert_values = ", ".join(
+        format_pair.values_pattern_function(val) for val in values
+    )
+
+    # generating data for retrieve query which may be wrong
+    retrieve_table = f"{table}_" if ("tables" in wrong) else table
+    retrieve_columns = (
+        [f"{col}_" for col in columns] if ("columns" in wrong) else columns
+    )
+
+    retrieve_columns_section = ", ".join(
+        f"{col} as {val}" for (col, val) in zip(retrieve_columns, values)
+    )
+
+    insert_query = (
+        draw(insert_query_generator())
+        .replace("<table>", table)
+        .replace("<columns>", insert_columns)
+        .replace("<values>", insert_values)
+    )
+
+    retrieve_query = (
+        draw(retrieve_query_generator())
+        .replace("<table>", retrieve_table)
+        .replace("<columns>", retrieve_columns_section)
+    )
+
+    data = pd.DataFrame({col: [1] for col in values})
+
+    return ParseInvalidInsertAndRetrieveComponents(
+        insert_query, retrieve_query, data, format_pair.sql_format, wrong
     )
 
 
 # ---- compare query strategies
-
-
 @dataclass
-class CompareQueryComponents:
-    """Encapsulates retrieve_query_strategy() outputs."""
+class ParseCompareComponents:
+    """Encapsulates parse_compare_query_strategy() outputs."""
 
     query: str
-    columns: list[str]
-    cursor_format: CursorFormat
+    orig_data: pd.DataFrame
+    sql_format: SQLFormat
 
 
 @composite
-def compare_query_strategy(draw: DrawFn) -> CompareQueryComponents:
-    """Generate a random valid compare query.
+def parse_compare_query_strategy(draw: DrawFn) -> ParseCompareComponents:
+    """Generate valid compare query and data.
 
     Args:
     ----
@@ -528,29 +704,64 @@ def compare_query_strategy(draw: DrawFn) -> CompareQueryComponents:
 
     Returns:
     -------
-        CompareQueryComponents
+        ParseCompareComponents
 
     """
-    num_columns = draw(st.integers(min_value=2, max_value=5))
-    columns = draw(
-        st.lists(
-            column_name_generator(),
-            min_size=num_columns,
-            max_size=num_columns,
-            unique=True,
-        )
+    n_tables = draw(st.integers(min_value=2, max_value=5))
+    n_columns = draw(st.integers(min_value=2, max_value=5))
+    tables = draw(columns_generator(n_tables))
+    columns = draw(columns_generator(n_columns))
+    format_pair = draw(format_pair_generator())
+
+    query = draw(compare_query_generator(n_tables=n_tables))
+
+    columns_section = ", ".join(columns)
+
+    query = query.replace("<columns>", columns_section)
+    for i, table in enumerate(tables):
+        query = query.replace(f"<table{i}>", table)
+
+    data = pd.DataFrame({col: [1] for col in columns})
+
+    return ParseCompareComponents(query, data, format_pair.sql_format)
+
+
+@dataclass
+class ParseInvalidCompareComponents:
+    """Encapsulates parse_invalid_compare_query_strategy() outputs."""
+
+    query: str
+    orig_data: pd.DataFrame
+    sql_format: SQLFormat
+
+
+@composite
+def parse_invalid_compare_query_strategy(
+    draw: DrawFn,
+) -> ParseInvalidCompareComponents:
+    """Generate a compare query in an incorrect format.
+
+    Args:
+    ----
+        draw: hypothesis draw function
+
+    Returns:
+    -------
+       ParseInvalidCompareComponents
+
+    """
+    parts = draw(parse_compare_query_strategy())
+    query = parts.query.lower()
+    return ParseInvalidCompareComponents(
+        query, parts.orig_data, parts.sql_format
     )
 
-    format_pair = draw(format_pair_generator())
-    query = draw(compare_query_generator(columns))
-    return CompareQueryComponents(query, columns, format_pair.cursor_format)
-
 
 @composite
-def invalid_compare_query_strategy(
+def parse_invalid_compare_dataset_strategy(
     draw: DrawFn,
-) -> tuple[list[str], CursorFormat]:
-    """Generate random invalid compare queries.
+) -> ParseInvalidCompareComponents:
+    """Generate a compare query with wrong data.
 
     Args:
     ----
@@ -558,407 +769,200 @@ def invalid_compare_query_strategy(
 
     Returns:
     -------
-        list of invalid compare queries
+       ParseInvalidCompareComponents
+
 
     """
-    random_text = draw(st.text(min_size=2, max_size=10))
-    components = draw(compare_query_strategy())
-
-    no_joins_query = re.sub("JOIN", "", components.query)
-    no_id_query = components.query.replace("id", "")
-    lowercase_query = components.query.lower()
-
-    return [
-        random_text,
-        no_joins_query,
-        no_id_query,
-        lowercase_query,
-    ], components.cursor_format
+    parts = draw(parse_compare_query_strategy())
+    data = parts.orig_data.copy()
+    data.columns = [f"{col}_id" for col in data.columns]
+    return ParseInvalidCompareComponents(parts.query, data, parts.sql_format)
 
 
-@dataclass
-class ParseCompareQueryComponents:
-    """Encapsulates parse_compare_strategy() outputs."""
-
-    query: str
-    columns: list[str]
-    data: pd.DataFrame
-    cursor_format: CursorFormat
+# ---- Testing check_columns_in_data
 
 
-@composite
-def parse_compare_strategy(draw: DrawFn) -> ParseCompareQueryComponents:
-    """Generate examples for parse_compare_query().
+@given(components=columns_in_data_strategy())
+def test_check_columns_in_data(components: CheckColumnsComponents) -> None:
+    """Test whether check_columns_in_data() returns the correct boolean result.
 
     Args:
     ----
-        draw: hypothesis draw function.
-
-    Returns:
-    -------
-        ParseCompareQueryComponents
+        components: CheckColumnsComponents
 
     """
-    query_components = draw(compare_query_strategy())
-    # making sure '_id' does not accidentally show up in column names
-    columns = [re.sub("_id", "__", col) for col in query_components.columns]
-    data = pd.DataFrame({col: [1, 2, 3] for col in columns})
-    return ParseCompareQueryComponents(
-        **query_components.__dict__,
-        data=data,
+    assert (
+        check_columns_in_data(components.columns, components.data)
+        == components.correct
     )
 
 
 # ---- Testing insert query parsing
-TEST_FORMAT = "TEST"
 
 
-@given(components=insert_query_strategy())
-def test_check_insert_query(components: InsertQueryComponents) -> None:
-    """Test whether valid insert queries correctly pass.
-
-    Args:
-    ----
-        components: InsertQueryComponents
-
-    """
-    assert (
-        check_insert_query(components.query, components.cursor_format) is None
-    )
-
-
-@given(data=invalid_insert_query_strategy())
-def test_check_insert_query_raises(
-    data: tuple[list[str], CursorFormat],
-) -> None:
-    """Test whether invalid insert queries correctly raise exceptions.
-
-    Args:
-    ----
-        data: tuple of list of invalid queries, CursorFormat
-
-    """
-    queries, cursor_format = data
-    for query in queries:
-        with pytest.raises(InvalidInsertQueryError):
-            check_insert_query(query, cursor_format)
-
-
-@given(components=insert_query_strategy())
-def test_get_table_from_insert(components: InsertQueryComponents) -> None:
-    """Test whether get_table_from_insert() correctly retrieves the table.
-
-    Args:
-    ----
-        components: InsertQueryComponents
-
-    """
-    assert (
-        get_table_from_insert(components.query, components.cursor_format)
-        == components.table
-    )
-
-
-@given(components=insert_query_strategy())
-def test_get_columns_from_insert(components: InsertQueryComponents) -> None:
-    """Test whether get_columns_from_insert() correctly retrieves columns from insert query.
-
-    Args:
-    ----
-        components: InsertQueryComponents
-
-    """
-    assert (
-        get_columns_from_insert(components.query, components.cursor_format)
-        == components.columns
-    )
-
-
-@given(components=insert_query_strategy())
-def test_get_columns_from_insert_raises(
-    components: InsertQueryComponents,
-) -> None:
-    """Test whether get_columns_from_insert() raises InvalidInsertQueryError correctly.
-
-    Args:
-    ----
-        components: InsertQueryComponents
-
-    """
-    # columns entered wrong
-    replace_columns = ", ".join(components.columns)
-    wrong_query = re.sub(replace_columns, "", components.query)
-
-    with pytest.raises(InvalidInsertQueryError):
-        get_columns_from_insert(wrong_query, components.cursor_format)
-
-
-@given(components=insert_query_strategy())
-def test_get_values_from_insert(
-    components: InsertQueryComponents,
-) -> None:
-    """Test whether get_values_from_insert() correctly retrieves columns.
-
-    Args:
-    ----
-        components: InsertQueryComponents
-
-    """
-    assert (
-        get_values_from_insert(components.query, components.cursor_format)
-        == components.values
-    )
-
-
-@given(components=insert_query_strategy(wrong_format_pair=True))
-def test_get_values_from_insert_raises(
-    components: InsertQueryComponents,
-) -> None:
-    """Test whether get_values_from_insert() correctly throws an exception when formats do not match.
-
-    Args:
-    ----
-        components: InsertQueryComponents
-
-    """
-    with pytest.raises(InvalidInsertQueryError):
-        get_values_from_insert(components.query, components.cursor_format)
-
-
-@given(components=parse_insert_strategy())
-def test_parse_insert_query(components: ParseInsertQueryComponents) -> None:
-    """Test whether parse_insert_query() correctly retrieves table, columns and values.
+@given(components=parse_insert_query_strategy())
+def test_parse_insert_query(components: ParseInsertComponents) -> None:
+    """Test whether parse_insert_query() returns the correct output.
 
     Args:
     ----
         components: ParseInsertQueryComponents
 
     """
-    out = components.columns, components.values
     assert (
         parse_insert_query(
-            components.query, components.data, components.cursor_format
+            components.query, components.data, components.sql_format
         )
-        == out
+        == components.parts
     )
 
 
-@given(components=parse_insert_strategy())
+@given(components=parse_invalid_insert_query_strategy())
 def test_parse_insert_query_raises(
-    components: ParseInsertQueryComponents,
+    components: ParseInvalidInsertComponents,
 ) -> None:
-    """Test whether parse_insert_query() correctly raises an exception when columns don't appear in data.
+    """Test whether parse_insert_query() correctly raises exceptions.
 
     Args:
     ----
-        components: ParseInsertQueryComponents
+        components: ParseInvalidInsertQueryComponents
 
     """
-    data = components.data
-    data.columns = [f"{col}_" for col in data.columns]
     with pytest.raises(InvalidInsertQueryError):
-        parse_insert_query(components.query, data, components.cursor_format)
+        parse_insert_query(
+            components.query, components.data, components.sql_format
+        )
 
 
 # ---- Testing retrieve query parsing
 
 
-@given(components=retrieve_query_strategy())
-def test_check_retrieve_query(components: RetrieveQueryComponents) -> None:
-    """Test whether valid retrieve queries correctly pass.
-
-    Args:
-    ----
-        components: RetrieveQueryComponents
-
-    """
-    assert (
-        check_retrieve_query(components.query, components.cursor_format) is None
-    )
-
-
-@given(data=invalid_retrieve_query_strategy())
-def test_check_retrieve_query_raises(
-    data: tuple[list[str], CursorFormat],
-) -> None:
-    """Test whether invalid retrieve queries correctly raise exceptions.
-
-    Args:
-    ----
-        data: list of invalid queries, CursorFormat
-
-    """
-    queries, cursor_format = data
-    for query in queries:
-        with pytest.raises(InvalidRetrieveQueryError):
-            check_retrieve_query(query, cursor_format)
-
-
-@given(components=retrieve_query_strategy())
-def test_get_table_from_retrieve(components: RetrieveQueryComponents) -> None:
-    """Test whether get_table_from_retrieve() correctly retrieves table.
-
-    Args:
-    ----
-        components: RetrieveQueryComponents
-
-    """
-    assert (
-        get_table_from_retrieve(components.query, components.cursor_format)
-        == components.table
-    )
-
-
-@given(components=retrieve_query_strategy())
-def test_get_table_from_retrieve_raises(
-    components: RetrieveQueryComponents,
-) -> None:
-    """Test whether get_table_from_retrieve() raises an exception when table cannot be found.
-
-    Args:
-    ----
-        components: RetrieveQueryComponents
-
-    """
-    wrong_query = re.sub(
-        rf"FROM\s*{components.table}", "FROM ", components.query
-    )
-    with pytest.raises(InvalidRetrieveQueryError):
-        get_table_from_retrieve(wrong_query, components.cursor_format)
-
-
-@given(components=retrieve_query_strategy())
-def test_get_columns_from_retrieve(components: RetrieveQueryComponents) -> None:
-    """Test whether get_columns_from_retrieve() correctly retrieves columns.
-
-    Args:
-    ----
-        components: RetrieveQueryComponents
-
-    """
-    assert (
-        get_columns_from_retrieve(components.query, components.cursor_format)
-        == components.columns
-    )
-
-
-@given(components=retrieve_query_strategy())
-def test_get_columns_from_retrieve_raises(
-    components: RetrieveQueryComponents,
-) -> None:
-    """Test whether get_columns_from_retrieve() correctly raises an exception when columns are missing.
-
-    Args:
-    ----
-        components: RetrieveQueryComponents
-
-    """
-    # columns entered wrong
-    wrong_query = re.sub(
-        r"\s*SELECT\s*.*\s*FROM", "SELECT FROM", components.query
-    )
-    with pytest.raises(InvalidRetrieveQueryError):
-        get_columns_from_retrieve(wrong_query, components.cursor_format)
-
-
-@given(components=parse_retrieve_strategy())
-def test_parse_retrieve_query(components: ParseRetrieveQueryComponents) -> None:
-    """Test whether parse_retrieve_query() correctly retrieves table and columns.
+@given(components=parse_retrieve_query_strategy())
+def test_parse_retrieve_query(components: ParseRetrieveComponents) -> None:
+    """Test whether parse_retrieve_query() returns the correct output.
 
     Args:
     ----
         components: ParseRetrieveQueryComponents
 
     """
-    out = components.columns
     assert (
         parse_retrieve_query(
-            components.query, components.data, components.cursor_format
+            components.query, components.data, components.sql_format
         )
-        == out
+        == components.parts
     )
 
 
-@given(components=parse_retrieve_strategy())
+@given(components=parse_invalid_retrieve_query_strategy())
 def test_parse_retrieve_query_raises(
-    components: ParseRetrieveQueryComponents,
+    components: ParseInvalidRetrieveComponents,
 ) -> None:
-    """Test whether parse_retrieve_query() correctly raises an exception when columns don't appear in data.
+    """Test whether parse_retrieve_query() correctly raises exceptions.
 
     Args:
     ----
-        components: ParseRetrieveQueryComponents
+        components: ParseInvalidRetrieveQueryComponents
 
     """
-    data = components.data
-    data.columns = [f"{col}_" for col in data.columns]
     with pytest.raises(InvalidRetrieveQueryError):
-        parse_retrieve_query(components.query, data, components.cursor_format)
+        parse_retrieve_query(
+            components.query, components.data, components.sql_format
+        )
 
 
-# ---- Testing compare query parsing
+#  ---- Testing insert_and_retrieve ----
 
 
-@given(components=compare_query_strategy())
-def test_check_compare_query(components: CompareQueryComponents) -> None:
-    """Test whether valid compare queries correctly pass.
+@given(components=parse_insert_and_retrieve_query_strategy())
+def test_parse_insert_and_retrieve_query(
+    components: ParseInsertAndRetrieveComponents,
+) -> None:
+    """Test whether parse_insert_and_retrieve_query() returns the correct output.
 
     Args:
     ----
-        components: CompareQueryComponents
+        components: ParseInsertAndRetrieveComponents
 
     """
     assert (
-        check_compare_query(components.query, components.cursor_format) is None
+        parse_insert_and_retrieve_query(
+            components.insert_query,
+            components.retrieve_query,
+            components.data,
+            components.sql_format,
+        )
+        == components.parts
     )
 
 
-@given(data=invalid_compare_query_strategy())
-def test_check_compare_query_raises(
-    data: tuple[list[str], CursorFormat],
+@given(components=parse_invalid_insert_and_retrieve_query_strategy())
+def test_parse_insert_and_retrieve_query_raises(
+    components: ParseInvalidInsertAndRetrieveComponents,
 ) -> None:
-    """Test whether invalid compare data correctly raise exceptions.
+    """Test whether parse_insert_and_retrieve_query() correctly raises exceptions.
 
     Args:
     ----
-        data: list of invalid queries
+        components: ParseInvalidInsertAndRetrieveComponents
 
     """
-    queries, cursor_format = data
-    for query in queries:
-        with pytest.raises(InvalidCompareQueryError):
-            check_compare_query(query, cursor_format)
+    with pytest.raises(InvalidInsertAndRetrieveQueryError):
+        parse_insert_and_retrieve_query(
+            components.insert_query,
+            components.retrieve_query,
+            components.data,
+            components.sql_format,
+        )
 
 
-@given(components=parse_compare_strategy())
-def test_parse_compare_query(components: ParseCompareQueryComponents) -> None:
+# ---- Testing compare
+@given(components=parse_compare_query_strategy())
+def test_parse_compare_query(components: ParseCompareComponents) -> None:
     """Test whether parse_compare_query() correctly passes.
 
     Args:
     ----
-        components: ParseCompareQueryComponents
+        components: ParseCompareComponents
 
     """
     assert (
         parse_compare_query(
-            components.query, components.data, components.cursor_format
+            components.query, components.orig_data, components.sql_format
         )
         is None
     )
 
 
-@given(components=parse_compare_strategy())
-def test_parse_compare_query_raises(
-    components: ParseCompareQueryComponents,
+@given(components=parse_invalid_compare_query_strategy())
+def test_parse_compare_query_raises_invalid(
+    components: ParseCompareComponents,
 ) -> None:
-    """Test whether parse_compare_query() correctly raises an exception when '_id' are in column names.
+    """Test whether parse_compare_query() correctly raises exception on invalid query.
 
     Args:
     ----
-        components: ParseCompareQueryComponents
+        components: ParseCompareComponents
 
     """
-    data = components.data
-    data.columns = [f"{col}_id" for col in data.columns]
+    with pytest.raises(InvalidCompareQueryError):
+        parse_compare_query(
+            components.query, components.orig_data, components.sql_format
+        )
+
+
+@given(components=parse_invalid_compare_dataset_strategy())
+def test_parse_compare_query_raises_wrong_dataset(
+    components: ParseCompareComponents,
+) -> None:
+    """Test whether parse_compare_query() correctly raises exception on invalid dataset.
+
+    Args:
+    ----
+        components: ParseCompareComponents
+
+    """
     with pytest.raises(WrongDatasetPassedError):
-        parse_compare_query(components.query, data, components.cursor_format)
+        parse_compare_query(
+            components.query, components.orig_data, components.sql_format
+        )

@@ -20,7 +20,7 @@ POSTGRES_INSERT_FORMAT = """
     INSERT INTO <table> (<column1>, <column2>, ...)
     VALUES (%(<column1_source>)s, %(<column2_source>)s, ...)
 """
-POSTGRES_VALUES_FORMAT = r"\((\w+)\)s"
+POSTGRES_VALUES_FORMAT = r"%\((\w+)\)s"
 
 # SQLite and PostgreSQL use the same format for retrieval
 RETRIEVE_FORMAT = """
@@ -44,38 +44,45 @@ class SQLFormat:
     """Stores formats and patterns of SQL queries."""
 
     insert_format: str
-    values_format: str
-    retrieve_format = RETRIEVE_FORMAT
-    compare_format = COMPARE_FORMAT
+    values_pattern: str
+    retrieve_format: str = RETRIEVE_FORMAT
+    compare_format: str = COMPARE_FORMAT
 
 
 @dataclass
 class SQLiteFormat(SQLFormat):
     """Format for SQLite interactions."""
 
-    insert_format = SQLITE_INSERT_FORMAT
-    values_format = SQLITE_VALUES_FORMAT
+    def __init__(self) -> None:
+        """Add insert_format and values_format."""
+        super().__init__(
+            insert_format=SQLITE_INSERT_FORMAT,
+            values_pattern=SQLITE_VALUES_FORMAT,
+        )
 
 
 @dataclass
 class PostgresFormat(SQLFormat):
     """Format for Postgres interactions."""
 
-    insert_format = POSTGRES_INSERT_FORMAT
-    values_format = POSTGRES_VALUES_FORMAT
+    def __init__(self) -> None:
+        """Add insert_format and values_format."""
+        super().__init__(
+            insert_format=POSTGRES_INSERT_FORMAT,
+            values_pattern=POSTGRES_VALUES_FORMAT,
+        )
 
 
 # HACK see if I can make this better somehow, but it works for now
 format_table = {
-    "<class 'sqlite3.Cursor>'": SQLiteFormat,
-    "<class 'psycopg.Cursor>'": PostgresFormat,
+    "<class 'sqlite3.Cursor>'": SQLiteFormat(),
+    "<class 'psycopg.Cursor>'": PostgresFormat(),
 }
 
 Cursor = sqlite3.Cursor | psycopg.Cursor
 
 
-# TODO add test for this?
-def get_sql_formats(cursor: Cursor) -> SQLFormat:
+def get_sql_format(cursor: Cursor) -> SQLFormat:
     """Get formats for this cursor.
 
     Essentially a helper function that figures out what database dialect this
