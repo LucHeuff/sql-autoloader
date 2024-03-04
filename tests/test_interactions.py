@@ -285,10 +285,9 @@ def parse_insert_query_strategy(draw: DrawFn) -> ParseInsertComponents:
 
     Returns:
     -------
-        ParseInsertQueryComponents
+        ParseInsertComponents
 
     """
-    # Generating query parts
     table = draw(table_generator())
     n_columns = draw(st.integers(min_value=1, max_value=5))
     columns = draw(columns_generator(n_columns))
@@ -303,7 +302,6 @@ def parse_insert_query_strategy(draw: DrawFn) -> ParseInsertComponents:
         format_pair.values_pattern_function(val) for val in values
     )
 
-    # generating query
     query = (
         draw(insert_query_generator())
         .replace("<table>", table)
@@ -338,7 +336,7 @@ def parse_invalid_insert_query_strategy(
 
     Returns:
     -------
-        ParseInvalidInsertQueryComponents
+        ParseInvalidInsertComponents
 
     """
     # Generating query parts
@@ -419,7 +417,7 @@ def parse_retrieve_query_strategy(draw: DrawFn) -> ParseRetrieveComponents:
 
     Returns:
     -------
-        ParseRetrieveQueryComponents
+        ParseRetrieveComponents
 
     """
     table = draw(table_generator())
@@ -479,7 +477,7 @@ def parse_invalid_retrieve_query_strategy(
 
     Returns:
     -------
-        ParseInvalidRetrieveQueryComponents
+        ParseInvalidRetrieveComponents
 
     """
     # Generating query parts
@@ -806,7 +804,7 @@ def test_parse_insert_query(components: ParseInsertComponents) -> None:
 
     Args:
     ----
-        components: ParseInsertQueryComponents
+        components: ParseInsertComponents
 
     """
     assert (
@@ -825,7 +823,7 @@ def test_parse_insert_query_raises(
 
     Args:
     ----
-        components: ParseInvalidInsertQueryComponents
+        components: ParseInvalidInsertComponents
 
     """
     with pytest.raises(InvalidInsertQueryError):
@@ -843,7 +841,7 @@ def test_parse_retrieve_query(components: ParseRetrieveComponents) -> None:
 
     Args:
     ----
-        components: ParseRetrieveQueryComponents
+        components: ParseRetrieveComponents
 
     """
     assert (
@@ -862,7 +860,7 @@ def test_parse_retrieve_query_raises(
 
     Args:
     ----
-        components: ParseInvalidRetrieveQueryComponents
+        components: ParseInvalidRetrieveComponents
 
     """
     with pytest.raises(InvalidRetrieveQueryError):
