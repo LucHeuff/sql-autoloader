@@ -33,7 +33,7 @@ def test_sqlite_cursor() -> None:
     """
     select = "SELECT name FROM test"
     data = pd.DataFrame({"name": ["Alice", "Bob", "Charlie", "Alice"]})
-    with SQLiteCursor() as cursor:
+    with SQLiteCursor(":memory:") as cursor:
         cursor.execute(create)
         cursor.executemany(insert, data.to_dict("records"))
         cursor.execute(select)

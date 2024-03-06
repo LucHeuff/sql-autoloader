@@ -128,22 +128,17 @@ def _dict_row(cursor: sqlite3.Cursor, row: tuple[Any, ...]) -> dict:
 
 
 class SQLiteCursor:
-    """Context manager for handling connections with PostgreSQL server.
+    """Context manager for handling connections with PostgreSQL server."""
 
-    Assumes the following variables are set in .env:
-        SQLITE_DB: filename to sqlite DB. If not available, defaults to in memory db.
-    """
-
-    def __init__(self, db: Union[str, None] = None) -> None:
+    def __init__(self, filename: str) -> None:
         """Create a connection to SQLite database.
 
         Args:
         ----
-            db: filename of SQLite database. If None, creates database in memory. (default: None)
+            filename: of SQLite database.
 
         """
-        db = ":memory:" if db is None else db
-        self.connection = sqlite3.connect(db)
+        self.connection = sqlite3.connect(filename)
         self.connection.row_factory = _dict_row
 
     def __enter__(self) -> sqlite3.Cursor:
@@ -166,10 +161,6 @@ class SQLiteCursor:
             exception: raised exception in the context manager
             message: message the exception is raised with
             traceback: traceback for the exception
-
-        Raises:
-        ------
-            RollbackCausedError: when an exception occurs within the context.
 
         """
         if exception:
@@ -227,10 +218,6 @@ class PostgresCursor:
             exception: raised exception in the context manager
             message: message the exception is raised with
             traceback: traceback for the exception
-
-        Raises:
-        ------
-            RollbackCausedError: when an exception occurs within the context.
 
         """
         if exception:
