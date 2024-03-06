@@ -342,12 +342,21 @@ def parse_invalid_insert_query_strategy(
     # Generating query parts
     table = draw(table_generator())
     # at least 2 columns, otherwise problems with columns are indistinguishable
-    n_columns = draw(st.integers(min_value=2, max_value=5))
+    n_columns = draw(st.integers(min_value=4, max_value=8))
     columns = draw(columns_generator(n_columns))
     values = draw(columns_generator(n_columns))
 
     # generating what is wrong
-    wrong_options = ["table", "columns", "values", "data", "format", "lower"]
+    wrong_options = [
+        "table",
+        "columns",
+        "values",
+        "fewer_columns",
+        "fewer_values",
+        "data",
+        "format",
+        "lower",
+    ]
     wrong = draw(
         st.lists(
             st.sampled_from(wrong_options),
@@ -360,6 +369,14 @@ def parse_invalid_insert_query_strategy(
     format_pair = draw(
         format_pair_generator(wrong_format_pair=("format" in wrong))
     )
+
+    # removing some columns or values if necessary
+    if "fewer_columns" in wrong:
+        columns = columns[:-1]
+
+    if "fewer_values" in wrong:
+        # remove a different number of values, in case "fewer_columns" is also chosen
+        values = values[:-2]
 
     # translating parts to the right (or wrong) format
     table_section = "" if ("table" in wrong) else table

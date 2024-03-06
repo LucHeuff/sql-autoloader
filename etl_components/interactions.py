@@ -1,3 +1,4 @@
+# TODO check whether I use language and terminology consistently
 import re
 from dataclasses import dataclass
 from io import StringIO
@@ -122,6 +123,17 @@ def parse_insert_query(
     # Check if values were found
     if not values:
         message = f"Invalid insert query, could not find columns to insert values from. Correct format is:\n{correct}"
+        raise InvalidInsertQueryError(message)
+
+    # Check if an equal number of columns and values was found
+    if len(columns) != len(values):
+        message = f"""Invalid insert query, extracted unequal number of database columns and dataset values.
+        Extrated columns are:
+            {columns}
+        but values are:
+            {values}
+        Did you forget a column, or specify it in an incorrect format? Correct format is:\n{correct}
+        """
         raise InvalidInsertQueryError(message)
 
     # Check if values appear in the data
