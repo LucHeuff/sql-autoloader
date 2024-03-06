@@ -1,7 +1,7 @@
 import sqlite3
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any, Union
+from typing import Any
 
 import psycopg
 from dotenv import dotenv_values
@@ -11,27 +11,27 @@ config = dotenv_values(".env")
 
 
 SQLITE_INSERT_FORMAT = """
-    INSERT INTO <table> (<column1>, <column2>, ...)
-    VALUES (:<column1_source>, :<column2_source>, ...)
+    INSERT INTO <table> (<column_db_1>, <column_db_2>, ...)
+    VALUES (:<column_df_1>, :<column_df_2>, ...)
 """
 SQLITE_VALUES_FORMAT = r":(\w+)"
 
 
 POSTGRES_INSERT_FORMAT = """
-    INSERT INTO <table> (<column1>, <column2>, ...)
-    VALUES (%(<column1_source>)s, %(<column2_source>)s, ...)
+    INSERT INTO <table> (<column_db_1>, <column_db_2>, ...)
+    VALUES (%(<column_df_1>)s, %(<column_df_2>)s, ...)
 """
 POSTGRES_VALUES_FORMAT = r"%\((\w+)\)s"
 
 # SQLite and PostgreSQL use the same format for retrieval
 RETRIEVE_FORMAT = """
-    SELECT id as <table>_id, <column1> as <alias1>, <column2> FROM <table>
+    SELECT id as <table>_id, <column_db_1> as <column_df_1>, <column_db_2> FROM <table>
 """
 COMPARE_FORMAT = """
     SELECT 
-        <table>.<column> as <alias>,
-        <table>.<column>,
-        <column>,
+        <table>.<column_db_1> as <column_df_1>,
+        <table>.<column_db_2>,
+        <column_db_3>,
         ...
     FROM <table>
         JOIN <other_table> ON <other_table>.<table>_id = <table>.id

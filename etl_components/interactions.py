@@ -1,4 +1,3 @@
-# TODO check whether I use language and terminology consistently
 import re
 from dataclasses import dataclass
 from io import StringIO
@@ -83,7 +82,7 @@ class QueryParts:
 def parse_insert_query(
     query: str, data: pd.DataFrame, sql_format: SQLFormat
 ) -> QueryParts:
-    """Perform linter checks on insert query and data and return table name, column names and value column names.
+    """Perform linter checks on insert query and data and return table, columns and values.
 
     Args:
     ----
@@ -152,7 +151,7 @@ def parse_insert_query(
 def parse_retrieve_query(
     query: str, data: pd.DataFrame, sql_format: SQLFormat
 ) -> QueryParts:
-    """Perform linter checks on retrieve query and return table name and column names.
+    """Perform linter checks on retrieve query and return table, columns and values.
 
     Args:
     ----
@@ -190,13 +189,13 @@ def parse_retrieve_query(
     columns, values = list(columns), list(values)
     # Check if something was found for columns and values
     if not columns or not values:
-        message = f"Invalid retrieve query, could not find columns. Correct format is:\n{correct}"
+        message = f"Invalid retrieve query, could not find database columns. Correct format is:\n{correct}"
         raise InvalidRetrieveQueryError(message)
 
-    # Check if the columns named in values appear in the data
+    # Check if the values appear in the data
     if not check_columns_in_data(values, data):
-        message = f"""Columns in retrieve query do not match columns in data:
-        Columns are:
+        message = f"""Names under which columns are retrieved from the database do not match column names in data:
+        Columns are retrieved as:
             {values}
         but available columns in data are:
             {data.columns.tolist()}
@@ -253,7 +252,7 @@ def parse_insert_and_retrieve_query(
 
     if insert_parts.columns != retrieve_parts.columns:
         message = f"""Insert and retrieve queries don't match. 
-        The columns that are inserted should match the columns that are retrieved, but received:
+        The columns that are inserted in the database should match the columns that are retrieved from the database, but received: 
         insert columns: 
             {insert_parts.columns}
         retrieve columns:
@@ -306,7 +305,7 @@ def _insert(
 
     Args:
     ----
-        cursor: cursor that performs interactions with the database.
+        cursor: that performs interactions with the database.
         query: insert query
         data: to be inserted into the database
         values: column names that are to be inserted from data
@@ -345,15 +344,16 @@ def insert(
 
     Args:
     ----
-        cursor: cursor that performs interactions with the database.
+        cursor: that performs interactions with the database.
         query: insert query of the following format:
-            INSERT INTO <table> (<column1>, <column2>, ...)
-            VALUES (...) # depending on sqlite or psycopg connection
+            INSERT INTO <table> (<column_db_1>, <column_db_2>, ...)
+            VALUES (...)  (format depending on sqlite or psycopg connection)
             ...
         data: to be inserted into the database
         use_copy: whether to use COPY if the cursor supports this.
             NOTE: regular queries will be translated to COPY,
-            but consistent behaviour is not guaranteed. Use at your own risk.
+            but COPY simply appends and does not support handling validity checks.
+            Consistent behaviour is not guaranteed. Use at your own risk.
 
     Raises:
     ------
@@ -382,7 +382,7 @@ def _retrieve(
 
     Args:
     ----
-        cursor: cursor that performs interactions with the database.
+        cursor: that performs interactions with the database.
         query: retrieve query
         data: to attach ids to
         values: columns on which to merge
@@ -416,9 +416,9 @@ def retrieve_ids(
 
     Args:
     ----
-        cursor: cursor that performs interactoins with the database.
+        cursor: that performs interactoins with the database.
         query: retrieve query of the following format:
-            SELECT id as <table>_id, <column1>, <column2> as <alias>, ... FROM <table>
+            SELECT id as <table>_id, <column_db_1> as <column_df_1>, <column_db_2> FROM <table>
         data: to which ids are to be merged
         replace: whether original columns without _id suffix are to be removed
 
@@ -445,13 +445,13 @@ def insert_and_retrieve_ids(
 
     Args:
     ----
-        cursor: cursor that performs interactions with the database
+        cursor: that performs interactions with the database
         insert_query: insert query of the following format:
-            INSERT INTO <table> (<column1>, <column2>, ...)
-            VALUES (...) # depending on sqlite or psycopg connection
+            INSERT INTO <table> (<column_db_1>, <column_db_2>, ...)
+            VALUES (...)  (format depending on sqlite or psycopg connection)
             ...
         retrieve_query: retrieve query of the followig format:
-            SELECT id as <table>_id, <column1>, <column2> as <alias>, ... FROM <table>
+            SELECT id as <table>_id, <column_db_1> as <column_df_1>, <column_db_2> FROM <table>
         data: to be inserted from and to which ids are to be merged
         replace: whether original columns without _id suffix are to be removed
 
@@ -476,18 +476,19 @@ def compare(cursor: Cursor, query: str, orig_data: pd.DataFrame) -> None:
 
     Args:
     ----
-        cursor: cursor that peforms interactions with the database
+        cursor: that peforms interactions with the database
         query: compare query of the following format:
             SELECT
-                <table>.<column> as <alias>,
-                <table>.<column>,
-                <column>,
+                <table>.<column_db_1> as <column_df_1>,
+                <table>.<column_db_2>,
+                <column_db_3>,
                 ...
             FROM <table>
                 JOIN <other_table> ON <other_table>.<table>_id = <table>.id
                 JOIN ...
             ...
-        orig_data: original data to be stored in the database, before any processing
+        orig_data: original data to be stored in the database, before any processing.
+                   This is used to compare the data in the database against.
 
     """
     sql_format = get_sql_format(cursor)
