@@ -365,7 +365,7 @@ def insert(
     if sql_format.copy_available and use_copy:
         _insert_with_copy(cursor, data, parts)  # type: ignore
     elif not sql_format.copy_available and use_copy:
-        raise CopyNotAvailableError(sql_format.copy_format)
+        raise CopyNotAvailableError("COPY not available for this cursor")
     else:
         _insert(cursor, query, data, parts.values)
 
