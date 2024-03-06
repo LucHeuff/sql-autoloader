@@ -68,7 +68,7 @@ def test_integration_sqlite() -> None:
         }
     )
     orig_data = data.copy()
-    with SQLiteCursor() as cursor:
+    with SQLiteCursor(":memory:") as cursor:
         cursor.execute(create_voertuig)
         cursor.execute(create_kleur)
         cursor.execute(create_voertuig_kleur)
@@ -165,7 +165,7 @@ def test_sqlite_copy_raises() -> None:
     )
 
     with pytest.raises(CopyNotAvailableError):  # noqa: SIM117
-        with SQLiteCursor() as cursor:
+        with SQLiteCursor(":memory:") as cursor:
             cursor.execute(create_vliegtuig)
             insert(cursor, insert_vliegtuig, data, use_copy=True)
 
