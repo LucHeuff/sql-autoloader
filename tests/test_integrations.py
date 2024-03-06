@@ -170,6 +170,38 @@ def test_sqlite_copy_raises() -> None:
             insert(cursor, insert_vliegtuig, data, use_copy=True)
 
 
+def test_sqlite_insert_and_retrieve_copy_raises() -> None:
+    """Test whether calling a SQLiteCursor with use_copy raises an exception."""
+    create_vliegtuig = """
+    CREATE TABLE vliegtuig (
+        id SERIAL PRIMARY KEY,
+        naam TEXT UNIQUE
+    )
+    """
+    insert_vliegtuig = """INSERT INTO vliegtuig (naam) VALUES (:vliegtuig)
+    ON CONFLICT DO NOTHING
+    """
+    retrieve_vliegtuig = (
+        "SELECT id as vliegtuig_id, naam as vliegtuig FROM vliegtuig"
+    )
+    data = pd.DataFrame(
+        {
+            "vliegtuig": ["Boeing", "Airbus", "Bombardier", "Embraer"],
+        }
+    )
+
+    with pytest.raises(CopyNotAvailableError):  # noqa: SIM117
+        with SQLiteCursor(":memory:") as cursor:
+            cursor.execute(create_vliegtuig)
+            _ = insert_and_retrieve_ids(
+                cursor,
+                insert_vliegtuig,
+                retrieve_vliegtuig,
+                data,
+                use_copy=True,
+            )
+
+
 def test_postgres_copy() -> None:
     """Test whether inserting with copy works as intended."""
     create_vliegtuig = """
@@ -194,6 +226,42 @@ def test_postgres_copy() -> None:
         test = pd.DataFrame(cursor.fetchall())
 
         pd.testing.assert_frame_equal(data, test, check_like=True)
+
+
+def test_postgres_insert_and_retrieve_copy() -> None:
+    """Test whether inserting with copy works as intended."""
+    create_vliegtuig = """
+    CREATE TABLE vliegmachine (
+        id SERIAL PRIMARY KEY,
+        naam TEXT UNIQUE
+    )
+    """
+    insert_vliegtuig = """INSERT INTO vliegmachine (naam) VALUES (%(vliegtuig)s)
+    ON CONFLICT DO NOTHING
+    """
+    retrieve_vliegtuig = (
+        "SELECT id as vliegmachine_id, naam as vliegtuig FROM vliegmachine"
+    )
+    data = pd.DataFrame(
+        {
+            "vliegtuig": ["Boeing", "Airbus", "Bombardier", "Embraer"],
+        }
+    )
+    compare_data = data.assign(vliegmachine_id=[1, 2, 3, 4])
+
+    with PostgresCursor() as cursor:
+        cursor.execute(create_vliegtuig)
+        test = insert_and_retrieve_ids(
+            cursor,
+            insert_vliegtuig,
+            retrieve_vliegtuig,
+            data,
+            replace=False,
+            use_copy=True,
+        )
+        cursor.execute("SELECT naam as vliegtuig FROM vliegtuig")
+
+        pd.testing.assert_frame_equal(compare_data, test, check_like=True)
 
 
 def setup() -> None:

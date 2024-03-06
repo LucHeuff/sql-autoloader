@@ -15,7 +15,6 @@ from etl_components.connections import (
     SQLiteFormat,
 )
 from etl_components.interactions import (
-    InsertAndRetrieveParts,
     InvalidCompareQueryError,
     InvalidInsertAndRetrieveQueryError,
     InvalidInsertQueryError,
@@ -566,7 +565,7 @@ class ParseInsertAndRetrieveComponents:
     retrieve_query: str
     data: pd.DataFrame
     sql_format: SQLFormat
-    parts: InsertAndRetrieveParts
+    parts: tuple[QueryParts, QueryParts]
 
 
 @composite
@@ -590,7 +589,10 @@ def parse_insert_and_retrieve_query_strategy(
     values = draw(columns_generator(n_columns))
     format_pair = draw(format_pair_generator())
 
-    parts = InsertAndRetrieveParts(values, values)
+    parts = (
+        QueryParts(table, columns, values),
+        QueryParts(table, columns, values),
+    )
 
     insert_columns = ", ".join(columns)
     insert_values = ", ".join(

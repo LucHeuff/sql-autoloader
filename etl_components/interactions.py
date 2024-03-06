@@ -206,20 +206,12 @@ def parse_retrieve_query(
     return QueryParts(table, columns, values)
 
 
-@dataclass
-class InsertAndRetrieveParts:
-    """Encapsulates parse_insert_and_retrieve_query() outputs."""
-
-    insert_values: list[str]
-    retrieve_values: list[str]
-
-
 def parse_insert_and_retrieve_query(
     insert_query: str,
     retrieve_query: str,
     data: pd.DataFrame,
     sql_format: SQLFormat,
-) -> InsertAndRetrieveParts:
+) -> tuple[QueryParts, QueryParts]:
     """Perform linter checks on insert and retrieve queries and data and check consistency.
 
     Args:
@@ -232,7 +224,7 @@ def parse_insert_and_retrieve_query(
 
     Returns:
     -------
-        retrieve columns, insert_values
+        insert QueryParts, retrieve QueryParts
 
 
     Raises:
@@ -262,7 +254,7 @@ def parse_insert_and_retrieve_query(
 
     # NOTE: no need to compare values, that happens intrinsically with comparison to data!
 
-    return InsertAndRetrieveParts(insert_parts.values, retrieve_parts.values)
+    return insert_parts, retrieve_parts
 
 
 def parse_compare_query(
@@ -298,8 +290,8 @@ def parse_compare_query(
 # ---- Database interface functions
 
 
-def _insert(
-    cursor: Cursor, query: str, data: pd.DataFrame, values: list[str]
+def _insert_without_copy(
+    cursor: Cursor, query: str, data: pd.DataFrame, parts: QueryParts
 ) -> None:
     """Perform insert operation.
 
@@ -308,16 +300,25 @@ def _insert(
         cursor: that performs interactions with the database.
         query: insert query
         data: to be inserted into the database
-        values: column names that are to be inserted from data
+        parts: QueryParts
 
     """
-    data = data[values].drop_duplicates()  # type: ignore
+    data = data[parts.values].drop_duplicates()  # type: ignore
     cursor.executemany(query, data.to_dict("records"))  # type: ignore
 
 
 def _insert_with_copy(
     cursor: PostgresCursor, data: pd.DataFrame, parts: QueryParts
 ) -> None:
+    """Perform insert operation using COPY protocol.
+
+    Args:
+    ----
+        cursor: that performs interactions with the database.
+        data: to be inserted into the database
+        parts: QueryParts
+
+    """
     data = (
         data[parts.values]
         .drop_duplicates()
@@ -335,6 +336,39 @@ def _insert_with_copy(
 
     with cursor.copy(query) as copy:  # type: ignore
         copy.write(string_io.read())
+
+
+def _insert(  # noqa: PLR0913
+    cursor: Cursor,
+    query: str,
+    data: pd.DataFrame,
+    sql_format: SQLFormat,
+    parts: QueryParts,
+    *,
+    use_copy: bool = False,
+) -> None:
+    """Perform the insert operation.
+
+    Args:
+    ----
+        cursor: that performs interactions with the database.
+        query: insert query
+        data: to be inserted
+        sql_format: SQLFormat
+        parts: QueryParts
+        use_copy: if COPY protocol is to be used (default: False)
+
+    Raises:
+    ------
+        CopyNotAvailableError:
+
+    """
+    if sql_format.copy_available and use_copy:
+        _insert_with_copy(cursor, data, parts)  # type: ignore
+    elif not sql_format.copy_available and use_copy:
+        raise CopyNotAvailableError("COPY not available for this cursor")
+    else:
+        _insert_without_copy(cursor, query, data, parts)
 
 
 def insert(
@@ -362,19 +396,14 @@ def insert(
     """
     sql_format = get_sql_format(cursor)
     parts = parse_insert_query(query, data, sql_format)
-    if sql_format.copy_available and use_copy:
-        _insert_with_copy(cursor, data, parts)  # type: ignore
-    elif not sql_format.copy_available and use_copy:
-        raise CopyNotAvailableError("COPY not available for this cursor")
-    else:
-        _insert(cursor, query, data, parts.values)
+    _insert(cursor, query, data, sql_format, parts, use_copy=use_copy)
 
 
 def _retrieve(
     cursor: Cursor,
     query: str,
     data: pd.DataFrame,
-    values: list[str],
+    parts: QueryParts,
     *,
     replace: bool,
 ) -> pd.DataFrame:
@@ -385,7 +414,7 @@ def _retrieve(
         cursor: that performs interactions with the database.
         query: retrieve query
         data: to attach ids to
-        values: columns on which to merge
+        parts: QueryParts
         replace: if columns are to be dropped
 
     Returns:
@@ -398,12 +427,12 @@ def _retrieve(
     cursor.execute(query)  # type: ignore
     ids_data = pd.DataFrame(cursor.fetchall())
 
-    data = data.merge(ids_data, how="left", on=values)
+    data = data.merge(ids_data, how="left", on=parts.values)
     assert not len(data) < orig_len, "Rows were lost when merging on ids."
     assert not len(data) > orig_len, "Rows were duplicated when merging on ids."
 
     if replace:
-        non_id_columns = [col for col in values if "_id" not in col]
+        non_id_columns = [col for col in parts.values if "_id" not in col]
         data = data.drop(columns=non_id_columns)
 
     return data
@@ -430,7 +459,7 @@ def retrieve_ids(
     """
     sql_format = get_sql_format(cursor)
     parts = parse_retrieve_query(query, data, sql_format)
-    return _retrieve(cursor, query, data, parts.values, replace=replace)
+    return _retrieve(cursor, query, data, parts, replace=replace)
 
 
 def insert_and_retrieve_ids(
@@ -440,6 +469,7 @@ def insert_and_retrieve_ids(
     data: pd.DataFrame,
     *,
     replace: bool = True,
+    use_copy: bool = False,
 ) -> pd.DataFrame:
     """Insert data into database and retrieve the newly created ids.
 
@@ -454,6 +484,10 @@ def insert_and_retrieve_ids(
             SELECT id as <table>_id, <column_db_1> as <column_df_1>, <column_db_2> FROM <table>
         data: to be inserted from and to which ids are to be merged
         replace: whether original columns without _id suffix are to be removed
+        use_copy: whether to use COPY if the cursor supports this.
+            NOTE: regular queries will be translated to COPY,
+            but COPY simply appends and does not support handling validity checks.
+            Consistent behaviour is not guaranteed. Use at your own risk.
 
     Returns:
     -------
@@ -462,12 +496,14 @@ def insert_and_retrieve_ids(
     """
     sql_format = get_sql_format(cursor)
 
-    parts = parse_insert_and_retrieve_query(
+    insert_parts, retrieve_parts = parse_insert_and_retrieve_query(
         insert_query, retrieve_query, data, sql_format
     )
-    _insert(cursor, insert_query, data, parts.insert_values)
+    _insert(
+        cursor, insert_query, data, sql_format, insert_parts, use_copy=use_copy
+    )
     return _retrieve(
-        cursor, retrieve_query, data, parts.retrieve_values, replace=replace
+        cursor, retrieve_query, data, retrieve_parts, replace=replace
     )
 
 
