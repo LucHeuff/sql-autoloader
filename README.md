@@ -93,11 +93,12 @@ To connect to the database server, `PostgresCursor` requires the following crede
 - `query`: an insert query of the correct format (see below)
 - `data`: a `pandas.DataFrame` containing at least the columns to be inserted.
 - `use_copy`: allows inserting using the COPY protocol when using a `PostgresCursor`
-  > NOTE:
-  > When `use_copy` is enabled, the regular insert query is translated into a COPY query.
-  > However, COPY does not support all the functionality that INSERT INTO provides.
-  > Mainly, COPY will append to existing data, but will not handle constraint conflicts.
-  > For more details, refer to the [PostgreSQL COPY documentation](https://www.postgresql.org/docs/current/sql-copy.html).
+
+> NOTE:
+> When `use_copy` is enabled, the regular insert query is translated into a COPY query.
+> However, COPY does not support all the functionality that INSERT INTO provides.
+> Mainly, COPY will append to existing data, but will not handle constraint conflicts.
+> For more details, refer to the [PostgreSQL COPY documentation](https://www.postgresql.org/docs/current/sql-copy.html).
 
 ### retrieve_ids
 
@@ -136,8 +137,8 @@ _The insert formats differ, since `sqlite3` and `psycopg` handle inserting using
 #### SQlite
 
 ```
-    INSERT INTO <table> (<column_db_1>, <column_db_2>, ...)
-    VALUES (:<column_df_1>, :<column_df_2>, ...)
+INSERT INTO <table> (<column_db_1>, <column_db_2>, ...)
+VALUES (:<column_df_1>, :<column_df_2>, ...)
 ```
 
 #### PostgreSQL
@@ -150,19 +151,19 @@ VALUES (%(<column_df_1>)s, %(<column_df_2>)s, ...)
 ### retrieve format
 
 ```
-    SELECT id as <table>_id, <column_db_1> as <column_df_1>, <column_db_2> FROM <table>
+SELECT id as <table>_id, <column_db_1> as <column_df_1>, <column_db_2> FROM <table>
 ```
 
 ### compare format
 
 ```
-    SELECT
-        <table>.<column_db_1> as <column_df_1>,
-        <table>.<column_db_2>,
-        <column_db_3>,
-        ...
-    FROM <table>
-        JOIN <other_table> ON <other_table>.<table>_id = <table>.id
-        JOIN ...
+SELECT
+    <table>.<column_db_1> as <column_df_1>,
+    <table>.<column_db_2>,
+    <column_db_3>,
     ...
+FROM <table>
+    JOIN <other_table> ON <other_table>.<table>_id = <table>.id
+    JOIN ...
+...
 ```
