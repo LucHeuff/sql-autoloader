@@ -439,6 +439,10 @@ def _retrieve(
     assert not len(data) < orig_len, "Rows were lost when merging on ids."
     assert not len(data) > orig_len, "Rows were duplicated when merging on ids."
 
+    assert (
+        not data.filter(regex="_id$").isna().any(axis=None)  # type: ignore
+    ), "Some id's were returned as NaN."
+
     if replace:
         non_id_columns = [col for col in parts.values if "_id" not in col]
         data = data.drop(columns=non_id_columns)
