@@ -536,8 +536,17 @@ def compare(cursor: Cursor, query: str, orig_data: pd.DataFrame) -> None:
     orig_data = orig_data.sort_values(
         by=orig_data.columns.tolist()
     ).reset_index(drop=True)
+
     data = data.sort_values(by=orig_data.columns.tolist()).reset_index(
         drop=True
     )
+    # converting columns to datetime if they are in orig_data
+    datetime_columns = orig_data.select_dtypes("datetime").columns.tolist()
+    for col in datetime_columns:
+        data[col] = pd.to_datetime(data[col])
 
-    pd.testing.assert_frame_equal(orig_data, data, check_like=True)
+    pd.testing.assert_frame_equal(
+        orig_data,
+        data,
+        check_like=True,
+    )

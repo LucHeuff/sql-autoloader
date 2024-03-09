@@ -266,6 +266,54 @@ def test_postgres_insert_and_retrieve_copy() -> None:
         pd.testing.assert_frame_equal(compare_data, test, check_like=True)
 
 
+def test_postgres_datetime() -> None:
+    """Test whether inserting date formats is problematic."""
+    create_activity = """
+    CREATE TABLE activity (
+        id SERIAL PRIMARY KEY,
+        name TEXT
+
+    )
+    """
+    create_schedule = """
+    CREATE TABLE schedule (
+        id SERIAL PRIMARY KEY,
+        activity_id INT REFERENCES activity (id),
+        date DATE
+    )
+    """
+    insert_activity = """
+    INSERT INTO activity (name) VALUES (%(activity)s)"""
+    retrieve_activity = (
+        "SELECT id as activity_id, name as activity FROM activity"
+    )
+
+    insert_schedule = """
+    INSERT INTO schedule (date, activity_id) VALUES (%(date)s, %(activity_id)s)"""
+    compare_schedule = """
+    SELECT activity.name as activity, date 
+    FROM activity
+        JOIN schedule ON schedule.activity_id = activity.id
+    """
+    data = pd.DataFrame(
+        {
+            "date": ["2023-05-03", "2024-09-05", "2052-06-02"],
+            "activity": ["Build LEGO", "Eat ice cream", "Watch stars"],
+        }
+    ).assign(date=lambda df: pd.to_datetime(df.date))
+
+    with PostgresCursor() as cursor:
+        orig_data = data.copy()
+        cursor.execute(create_activity)
+        cursor.execute(create_schedule)
+        data = insert_and_retrieve_ids(
+            cursor, insert_activity, retrieve_activity, data
+        )
+        insert(cursor, insert_schedule, data)
+
+        compare(cursor, compare_schedule, orig_data)
+
+
 def setup() -> None:
     """Remove database stuff before tests have run."""
     with PostgresCursor() as cursor:
