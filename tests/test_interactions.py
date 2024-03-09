@@ -656,7 +656,7 @@ def parse_invalid_insert_and_retrieve_query_strategy(
     format_pair = draw(format_pair_generator())
 
     # generating what is going wrong
-    wrong_options = ["tables", "columns"]
+    wrong_options = ["tables", "columns", "values"]
     wrong = draw(
         st.lists(
             st.sampled_from(wrong_options),
@@ -676,9 +676,11 @@ def parse_invalid_insert_and_retrieve_query_strategy(
     retrieve_columns = (
         [f"{col}_" for col in columns] if ("columns" in wrong) else columns
     )
+    retrieve_values = values[:-1] if ("values" in wrong) else values
 
     retrieve_columns_section = ", ".join(
-        f"{col} as {val}" for (col, val) in zip(retrieve_columns, values)
+        f"{col} as {val}"
+        for (col, val) in zip(retrieve_columns, retrieve_values)
     )
 
     insert_query = (

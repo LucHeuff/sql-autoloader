@@ -252,7 +252,15 @@ def parse_insert_and_retrieve_query(
         """
         raise InvalidInsertAndRetrieveQueryError(message)
 
-    # NOTE: no need to compare values, that happens intrinsically with comparison to data!
+    if insert_parts.values != retrieve_parts.values:
+        message = f"""Insert and retrieve queries don't match. 
+        The columns in the dataframe which are inserted in the database should match the aliases under which columns are retrieved from the database, but received: 
+        insert values: 
+            {insert_parts.values}
+        retrieve values:
+            {retrieve_parts.values}
+        """
+        raise InvalidInsertAndRetrieveQueryError(message)
 
     return insert_parts, retrieve_parts
 
