@@ -435,6 +435,13 @@ def _retrieve(
     cursor.execute(query)  # type: ignore
     ids_data = pd.DataFrame(cursor.fetchall())
 
+    datetime_columns = data.select_dtypes("datetime").columns.tolist()
+
+    # converting columns to datetime if they are in the original data
+    for col in datetime_columns:
+        if col in ids_data.columns:
+            ids_data[col] = pd.to_datetime(ids_data[col])
+
     data = data.merge(ids_data, how="left", on=parts.values)
     assert not len(data) < orig_len, "Rows were lost when merging on ids."
     assert not len(data) > orig_len, "Rows were duplicated when merging on ids."
@@ -552,10 +559,12 @@ def compare(cursor: Cursor, query: str, orig_data: pd.DataFrame) -> None:
     data = data.sort_values(by=orig_data.columns.tolist()).reset_index(
         drop=True
     )
+
     # converting columns to datetime if they are in orig_data
     datetime_columns = orig_data.select_dtypes("datetime").columns.tolist()
     for col in datetime_columns:
-        data[col] = pd.to_datetime(data[col])
+        if col in data:
+            data[col] = pd.to_datetime(data[col])
 
     pd.testing.assert_frame_equal(
         orig_data,

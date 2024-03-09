@@ -19,133 +19,154 @@ DATA = pd.DataFrame(
 
 def test_integration_sqlite() -> None:
     """Perform integration test using SQLite."""
-    create_voertuig = """
-    CREATE TABLE voertuig (
+    # TODO ergens voor een insert_and_retrieve een DATE/pd.DateTime column toevoegen
+    create_vehicle = """
+    CREATE TABLE vehicle (
         id INTEGER PRIMARY KEY,
-        naam TEXT UNIQUE
+        name TEXT UNIQUE,
+        invented DATE
     )
     """
-    create_kleur = """
-    CREATE TABLE kleur (
+    create_colour = """
+    CREATE TABLE colour (
         id INTEGER PRIMARY KEY,
-        naam TEXT UNIQUE
+        name TEXT UNIQUE
     )
     """
-    create_voertuig_kleur = """
-    CREATE TABLE voertuig_kleur (
-        voertuig_id INT REFERENCES voertuig (id) ON DELETE CASCADE,
-        kleur_id INT REFERENCES kleur (id) ON DELETE CASCADE,
-        UNIQUE (voertuig_id, kleur_id)
+    create_vehicle_colour = """
+    CREATE TABLE vehicle_colour (
+        vehicle_id INT REFERENCES vehicle (id) ON DELETE CASCADE,
+        colour_id INT REFERENCES colour (id) ON DELETE CASCADE,
+        UNIQUE (vehicle_id, colour_id)
     )
     """
-    insert_voertuig = """
-    INSERT INTO voertuig (naam) VALUES (:voertuig)
+    insert_vehicle = """
+    INSERT INTO vehicle (name, invented) VALUES (:vehicle, :invented)
     ON CONFLICT DO NOTHING
     """
-    retrieve_voertuig = (
-        "SELECT id as voertuig_id, naam as voertuig FROM voertuig"
+    retrieve_vehicle = (
+        "SELECT id as vehicle_id, name as vehicle, invented FROM vehicle"
     )
-    insert_kleur = """
-    INSERT INTO kleur (naam) VALUES (:kleur)
+    insert_colour = """
+    INSERT INTO colour (name) VALUES (:colour)
     ON CONFLICT DO NOTHING
     """
-    retrieve_kleur = "SELECT id as kleur_id, naam as kleur FROM kleur"
-    insert_voertuig_kleur = """
-    INSERT INTO voertuig_kleur (voertuig_id, kleur_id) VALUES (:voertuig_id, :kleur_id)
+    retrieve_colour = "SELECT id as colour_id, name as colour FROM colour"
+    insert_vehicle_colour = """
+    INSERT INTO vehicle_colour (vehicle_id, colour_id) VALUES (:vehicle_id, :colour_id)
     ON CONFLICT DO NOTHING
     """
 
     compare_query = """
-    SELECT voertuig.naam as voertuig, kleur.naam as kleur FROM voertuig
-    JOIN voertuig_kleur ON voertuig_kleur.voertuig_id = voertuig.id
-    JOIN kleur ON voertuig_kleur.kleur_id = kleur.id
+    SELECT vehicle.name as vehicle, invented, colour.name  as colour FROM vehicle
+    JOIN vehicle_colour ON vehicle_colour.vehicle_id = vehicle.id
+    JOIN colour ON vehicle_colour.colour_id = colour.id
     """
 
     data = pd.DataFrame(
         {
             "index": [0, 0, 0, 0],
-            "voertuig": ["fiets", "boot", "trein", "fiets"],
-            "kleur": ["rood", "geel", "geel", "blauw"],
+            "vehicle": ["bike", "boat", "train", "bike"],
+            "invented": [
+                "1912-04-05",
+                "1900-03-07",
+                "1850-03-03",
+                "1912-04-05",
+            ],
+            "colour": ["red", "yellow", "yellow", "blue"],
         }
     ).set_index("index")
     orig_data = data.copy()
     with SQLiteCursor(":memory:") as cursor:
-        cursor.execute(create_voertuig)
-        cursor.execute(create_kleur)
-        cursor.execute(create_voertuig_kleur)
+        cursor.execute(create_vehicle)
+        cursor.execute(create_colour)
+        cursor.execute(create_vehicle_colour)
         data = insert_and_retrieve_ids(
-            cursor, insert_voertuig, retrieve_voertuig, data
+            cursor, insert_vehicle, retrieve_vehicle, data
         )
         data = insert_and_retrieve_ids(
-            cursor, insert_kleur, retrieve_kleur, data
+            cursor, insert_colour, retrieve_colour, data
         )
-        insert(cursor, insert_voertuig_kleur, data)
+        insert(cursor, insert_vehicle_colour, data)
         compare(cursor, compare_query, orig_data)
 
 
 def test_integration_postgres() -> None:
     """Perform integration test using Postgres."""
-    create_voertuig = """
-    CREATE TABLE voertuig (
+    create_vehicle = """
+    CREATE TABLE vehicle (
         id SERIAL PRIMARY KEY,
-        naam TEXT UNIQUE
+        name TEXT UNIQUE,
+        invented DATE
     )
     """
-    create_kleur = """
-    CREATE TABLE kleur (
+    create_colour = """
+    CREATE TABLE colour (
         id SERIAL PRIMARY KEY,
-        naam TEXT UNIQUE
+        name TEXT UNIQUE
     )
     """
-    create_voertuig_kleur = """
-    CREATE TABLE voertuig_kleur (
-        voertuig_id INT REFERENCES voertuig (id) ON DELETE CASCADE,
-        kleur_id INT REFERENCES kleur (id) ON DELETE CASCADE,
-        UNIQUE (voertuig_id, kleur_id)
+    create_vehicle_colour = """
+    CREATE TABLE vehicle_colour (
+        vehicle_id INT REFERENCES vehicle (id) ON DELETE CASCADE,
+        colour_id INT REFERENCES colour (id) ON DELETE CASCADE,
+        UNIQUE (vehicle_id, colour_id)
     )
     """
-    insert_voertuig = """
-    INSERT INTO voertuig (naam) VALUES (%(voertuig)s)
+    insert_vehicle = """
+    INSERT INTO vehicle (name, invented) VALUES (%(vehicle)s, %(invented)s)
     ON CONFLICT DO NOTHING
     """
-    retrieve_voertuig = (
-        "SELECT id as voertuig_id, naam as voertuig FROM voertuig"
+    retrieve_vehicle = (
+        "SELECT id as vehicle_id, name as vehicle, invented FROM vehicle"
     )
-    insert_kleur = """
-    INSERT INTO kleur (naam) VALUES (%(kleur)s)
+    insert_colour = """
+    INSERT INTO colour (name) VALUES (%(colour)s)
     ON CONFLICT DO NOTHING
     """
-    retrieve_kleur = "SELECT id as kleur_id, naam as kleur FROM kleur"
-    insert_voertuig_kleur = """
-    INSERT INTO voertuig_kleur (voertuig_id, kleur_id) VALUES (%(voertuig_id)s, %(kleur_id)s)
+    retrieve_colour = "SELECT id as colour_id, name as colour FROM colour"
+    insert_vehicle_colour = """
+    INSERT INTO vehicle_colour (vehicle_id, colour_id) VALUES (%(vehicle_id)s, %(colour_id)s)
     ON CONFLICT DO NOTHING
     """
 
     compare_query = """
-    SELECT voertuig.naam as voertuig, kleur.naam as kleur FROM voertuig
-    JOIN voertuig_kleur ON voertuig_kleur.voertuig_id = voertuig.id
-    JOIN kleur ON voertuig_kleur.kleur_id = kleur.id
+    SELECT vehicle.name as vehicle, colour.name as colour, invented FROM vehicle
+    JOIN vehicle_colour ON vehicle_colour.vehicle_id = vehicle.id
+    JOIN colour ON vehicle_colour.colour_id = colour.id
     """
 
-    data = pd.DataFrame(
-        {
-            "index": [0, 0, 0, 0],
-            "voertuig": ["fiets", "boot", "trein", "fiets"],
-            "kleur": ["rood", "geel", "geel", "blauw"],
-        }
-    ).set_index("index")
+    data = (
+        pd.DataFrame(
+            {
+                "index": [0, 0, 0, 0],
+                "vehicle": ["bike", "boat", "train", "bike"],
+                "invented": [
+                    "1912-04-05",
+                    "1900-03-07",
+                    "1850-03-03",
+                    "1912-04-05",
+                ],
+                "colour": ["red", "yellow", "yellow", "blue"],
+            }
+        )
+        .assign(invented=lambda df: pd.to_datetime(df.invented))
+        .set_index("index")
+    )
     orig_data = data.copy()
     with PostgresCursor() as cursor:
-        cursor.execute(create_voertuig)
-        cursor.execute(create_kleur)
-        cursor.execute(create_voertuig_kleur)
+        cursor.execute(create_vehicle)
+        cursor.execute(create_colour)
+        cursor.execute(create_vehicle_colour)
         data = insert_and_retrieve_ids(
-            cursor, insert_voertuig, retrieve_voertuig, data
+            cursor, insert_vehicle, retrieve_vehicle, data
         )
+
         data = insert_and_retrieve_ids(
-            cursor, insert_kleur, retrieve_kleur, data
+            cursor, insert_colour, retrieve_colour, data
         )
-        insert(cursor, insert_voertuig_kleur, data)
+
+        insert(cursor, insert_vehicle_colour, data)
         compare(cursor, compare_query, orig_data)
 
 
@@ -272,7 +293,6 @@ def test_postgres_datetime() -> None:
     CREATE TABLE activity (
         id SERIAL PRIMARY KEY,
         name TEXT
-
     )
     """
     create_schedule = """
@@ -291,7 +311,7 @@ def test_postgres_datetime() -> None:
     insert_schedule = """
     INSERT INTO schedule (date, activity_id) VALUES (%(date)s, %(activity_id)s)"""
     compare_schedule = """
-    SELECT activity.name as activity, date 
+    SELECT activity.name as activity, schedule.date as date
     FROM activity
         JOIN schedule ON schedule.activity_id = activity.id
     """
