@@ -63,10 +63,11 @@ def test_integration_sqlite() -> None:
 
     data = pd.DataFrame(
         {
+            "index": [0, 0, 0, 0],
             "voertuig": ["fiets", "boot", "trein", "fiets"],
             "kleur": ["rood", "geel", "geel", "blauw"],
         }
-    )
+    ).set_index("index")
     orig_data = data.copy()
     with SQLiteCursor(":memory:") as cursor:
         cursor.execute(create_voertuig)
@@ -128,10 +129,11 @@ def test_integration_postgres() -> None:
 
     data = pd.DataFrame(
         {
+            "index": [0, 0, 0, 0],
             "voertuig": ["fiets", "boot", "trein", "fiets"],
             "kleur": ["rood", "geel", "geel", "blauw"],
         }
-    )
+    ).set_index("index")
     orig_data = data.copy()
     with PostgresCursor() as cursor:
         cursor.execute(create_voertuig)

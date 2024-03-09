@@ -532,7 +532,12 @@ def compare(cursor: Cursor, query: str, orig_data: pd.DataFrame) -> None:
     cursor.execute(query)  # type: ignore
     data = pd.DataFrame(cursor.fetchall())
 
-    orig_data = orig_data.sort_values(by=orig_data.columns.tolist())
-    data = data.sort_values(by=orig_data.columns.tolist())
+    # resetting indices because they don't really matter themselves
+    orig_data = orig_data.sort_values(
+        by=orig_data.columns.tolist()
+    ).reset_index(drop=True)
+    data = data.sort_values(by=orig_data.columns.tolist()).reset_index(
+        drop=True
+    )
 
     pd.testing.assert_frame_equal(orig_data, data, check_like=True)
