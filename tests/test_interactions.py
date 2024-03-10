@@ -20,7 +20,6 @@ from etl_components.interactions import (
     InvalidInsertQueryError,
     InvalidRetrieveQueryError,
     QueryParts,
-    WrongDatasetPassedError,
     check_columns_in_data,
     parse_compare_query,
     parse_insert_and_retrieve_query,
@@ -598,9 +597,8 @@ def parse_insert_and_retrieve_query_strategy(
     insert_values = ", ".join(
         format_pair.values_pattern_function(val) for val in values
     )
-    retrieve_columns = ", ".join(
-        f"{col} as {val}" for (col, val) in zip(columns, values)
-    )
+    retrieve_pairs = [f"{col} as {val}" for (col, val) in zip(columns, values)]
+    retrieve_columns = ", ".join(retrieve_pairs)
 
     insert_query = (
         draw(insert_query_generator())
@@ -726,7 +724,7 @@ def parse_compare_query_strategy(draw: DrawFn) -> ParseCompareComponents:
         ParseCompareComponents
 
     """
-    n_tables = draw(st.integers(min_value=2, max_value=5))
+    n_tables = draw(st.integers(min_value=1, max_value=5))
     n_columns = draw(st.integers(min_value=2, max_value=5))
     tables = draw(columns_generator(n_tables))
     columns = draw(columns_generator(n_columns))
@@ -740,7 +738,7 @@ def parse_compare_query_strategy(draw: DrawFn) -> ParseCompareComponents:
     for i, table in enumerate(tables):
         query = query.replace(f"<table{i}>", table)
 
-    data = pd.DataFrame({col: [1] for col in columns})
+    data = pd.DataFrame({col: [1] for col in draw(st.permutations(columns))})
 
     return ParseCompareComponents(query, data, format_pair.sql_format)
 
@@ -752,6 +750,7 @@ class ParseInvalidCompareComponents:
     query: str
     orig_data: pd.DataFrame
     sql_format: SQLFormat
+    wrong: list[str]
 
 
 @composite
@@ -769,33 +768,43 @@ def parse_invalid_compare_query_strategy(
        ParseInvalidCompareComponents
 
     """
-    parts = draw(parse_compare_query_strategy())
-    query = parts.query.lower()
-    return ParseInvalidCompareComponents(
-        query, parts.orig_data, parts.sql_format
+    n_tables = draw(st.integers(min_value=1, max_value=5))
+    n_columns = draw(st.integers(min_value=2, max_value=5))
+    tables = draw(columns_generator(n_tables))
+    columns = draw(columns_generator(n_columns))
+    format_pair = draw(format_pair_generator())
+
+    query = draw(compare_query_generator(n_tables=n_tables))
+
+    wrong_options = ["no_columns", "columns_not_match", "lower"]
+    wrong = draw(
+        st.lists(
+            st.sampled_from(wrong_options),
+            min_size=1,
+            max_size=len(wrong_options),
+            unique=True,
+        )
     )
 
+    columns_section = "" if ("no_columns" in wrong) else ", ".join(columns)
 
-@composite
-def parse_invalid_compare_dataset_strategy(
-    draw: DrawFn,
-) -> ParseInvalidCompareComponents:
-    """Generate a compare query with wrong data.
+    query = query.replace("<columns>", columns_section)
+    for i, table in enumerate(tables):
+        query = query.replace(f"<table{i}>", table)
 
-    Args:
-    ----
-        draw: hypothesis draw function
+    data_columns = (
+        columns + [f"{col}_" for col in columns]
+        if ("columns_not_match" in wrong)
+        else columns
+    )
+    data = pd.DataFrame({col: [1] for col in data_columns})
 
-    Returns:
-    -------
-       ParseInvalidCompareComponents
+    if "lower" in wrong:
+        query = query.lower()
 
-
-    """
-    parts = draw(parse_compare_query_strategy())
-    data = parts.orig_data.copy()
-    data.columns = [f"{col}_id" for col in data.columns]
-    return ParseInvalidCompareComponents(parts.query, data, parts.sql_format)
+    return ParseInvalidCompareComponents(
+        query, data, format_pair.sql_format, wrong
+    )
 
 
 # ---- Testing check_columns_in_data
@@ -954,7 +963,7 @@ def test_parse_compare_query(components: ParseCompareComponents) -> None:
 
 
 @given(components=parse_invalid_compare_query_strategy())
-def test_parse_compare_query_raises_invalid(
+def test_parse_compare_query_raises(
     components: ParseCompareComponents,
 ) -> None:
     """Test whether parse_compare_query() correctly raises exception on invalid query.
@@ -965,23 +974,6 @@ def test_parse_compare_query_raises_invalid(
 
     """
     with pytest.raises(InvalidCompareQueryError):
-        parse_compare_query(
-            components.query, components.orig_data, components.sql_format
-        )
-
-
-@given(components=parse_invalid_compare_dataset_strategy())
-def test_parse_compare_query_raises_wrong_dataset(
-    components: ParseCompareComponents,
-) -> None:
-    """Test whether parse_compare_query() correctly raises exception on invalid dataset.
-
-    Args:
-    ----
-        components: ParseCompareComponents
-
-    """
-    with pytest.raises(WrongDatasetPassedError):
         parse_compare_query(
             components.query, components.orig_data, components.sql_format
         )

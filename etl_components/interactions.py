@@ -36,12 +36,6 @@ class InvalidCompareQueryError(Exception):
     pass
 
 
-class WrongDatasetPassedError(Exception):
-    """Exception for when the wrong dataset is passed into compare()."""
-
-    pass
-
-
 class CopyNotAvailableError(Exception):
     """Exception when the user tries insert with use_copy=True when COPY is not supported."""
 
@@ -242,23 +236,16 @@ def parse_insert_and_retrieve_query(
         """
         raise InvalidInsertAndRetrieveQueryError(message)
 
-    if insert_parts.columns != retrieve_parts.columns:
-        message = f"""Insert and retrieve queries don't match. 
-        The columns that are inserted in the database should match the columns that are retrieved from the database, but received: 
-        insert columns: 
-            {insert_parts.columns}
-        retrieve columns:
-            {retrieve_parts.columns}
-        """
-        raise InvalidInsertAndRetrieveQueryError(message)
+    insert_pairs = zip(insert_parts.columns, insert_parts.values)
+    retrieve_pairs = zip(retrieve_parts.columns, retrieve_parts.values)
 
-    if insert_parts.values != retrieve_parts.values:
-        message = f"""Insert and retrieve queries don't match. 
-        The columns in the dataframe which are inserted in the database should match the aliases under which columns are retrieved from the database, but received: 
-        insert values: 
-            {insert_parts.values}
-        retrieve values:
-            {retrieve_parts.values}
+    if set(insert_pairs) != set(retrieve_pairs):
+        message = f"""Insert and retrieve queries don't match.
+        columns name pairs in database and in dataframe should match between insert and retrieve queries, but received:
+        from insert query:
+            {insert_pairs}
+        from retrieve query:
+            {retrieve_pairs}
         """
         raise InvalidInsertAndRetrieveQueryError(message)
 
@@ -284,15 +271,26 @@ def parse_compare_query(
     """
     correct = sql_format.compare_format
 
-    pattern = r"^\s*SELECT\s*[\S\s]+FROM \w+\s*(?:JOIN \w+ ON \w+\.\w+_id = \w+\.id\s*)+"
-    if not re.match(pattern, query):
+    pattern = r"^\s*SELECT\s*(?P<columns>[\S\s]+)FROM \w+\s*(?:JOIN \w+ ON \w+\.\w+_id = \w+\.id\s*)*"
+    match = re.match(pattern, query)
+    if not match:
         message = f"Invalid compare query format. Correct format is\n{correct}"
         raise InvalidCompareQueryError(message)
 
-    if any("_id" in col for col in orig_data.columns):
-        message = """Dataset contains columns with '_id' in the name. 
-        Did you perhaps pass [data] instead of [orig_data] to compare()? 😊"""
-        raise WrongDatasetPassedError(message)
+    columns_section = match.group("columns").split(", ")
+    # splitting out parts: e.g "name" or "name as alias" as separate lists
+    column_parts = [col.strip().split(" ") for col in columns_section]
+    # the first elements now termed 'columns', last elements termed 'values'
+    values = [col[-1] for col in column_parts]
+
+    if set(values) != set(orig_data.columns.tolist()):
+        message = f"""Invalid compare query format, column names read out from database do not match columns in [orig_data]:
+        Read out from database:
+            {values}
+        But columns in [orig_data]:
+            {orig_data.columns.tolist()}
+        """
+        raise InvalidCompareQueryError(message)
 
 
 # ---- Database interface functions
