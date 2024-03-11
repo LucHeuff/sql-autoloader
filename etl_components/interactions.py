@@ -174,7 +174,7 @@ def parse_retrieve_query(
 
     table = match.group("table")
 
-    columns_section = match.group("columns").split(", ")
+    columns_section = re.sub(r"\s+", " ", match.group("columns")).split(", ")
     # splitting out parts: e.g "name" or "name as alias" as separate lists
     column_parts = [col.strip().split(" ") for col in columns_section]
     # the first elements now termed 'columns', last elements termed 'values'
@@ -277,7 +277,7 @@ def parse_compare_query(
         message = f"Invalid compare query format. Correct format is\n{correct}"
         raise InvalidCompareQueryError(message)
 
-    columns_section = match.group("columns").split(", ")
+    columns_section = re.sub(r"\s+", " ", match.group("columns")).split(", ")
     # splitting out parts: e.g "name" or "name as alias" as separate lists
     column_parts = [col.strip().split(" ") for col in columns_section]
     # the first elements now termed 'columns', last elements termed 'values'
