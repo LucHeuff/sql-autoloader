@@ -236,8 +236,8 @@ def parse_insert_and_retrieve_query(
         """
         raise InvalidInsertAndRetrieveQueryError(message)
 
-    insert_pairs = zip(insert_parts.columns, insert_parts.values)
-    retrieve_pairs = zip(retrieve_parts.columns, retrieve_parts.values)
+    insert_pairs = list(zip(insert_parts.columns, insert_parts.values))
+    retrieve_pairs = list(zip(retrieve_parts.columns, retrieve_parts.values))
 
     if set(insert_pairs) != set(retrieve_pairs):
         message = f"""Insert and retrieve queries don't match.
