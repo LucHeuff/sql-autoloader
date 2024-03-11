@@ -433,6 +433,8 @@ def _retrieve(
     cursor.execute(query)  # type: ignore
     ids_data = pd.DataFrame(cursor.fetchall())
 
+    assert len(ids_data) > 0, "Retrieve query did not return any results."
+
     datetime_columns = data.select_dtypes("datetime").columns.tolist()
 
     # converting columns to datetime if they are in the original data
@@ -549,7 +551,9 @@ def compare(cursor: Cursor, query: str, orig_data: pd.DataFrame) -> None:
     cursor.execute(query)  # type: ignore
     data = pd.DataFrame(cursor.fetchall())
 
-    # resetting indices because they don't really matter themselves
+    assert len(data) > 0, "Compare query did not return any results."
+
+    # resetting indices because they don't really matter in themselves
     orig_data = orig_data.sort_values(
         by=orig_data.columns.tolist()
     ).reset_index(drop=True)
