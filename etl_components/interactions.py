@@ -95,7 +95,8 @@ def parse_insert_query(
     """
     correct = sql_format.insert_format
 
-    query_pattern = r"^\s*INSERT INTO\s*(?P<table>\w+)\s*\((?P<columns>[\S\s]*)\)\s*VALUES\s*\((?P<values>[\S\s]*)\)"
+    query_pattern = sql_format.insert_pattern
+    # query_pattern = r"^\s*INSERT INTO\s*(?P<table>\w+)\s*\((?P<columns>[\S\s]*)\)\s*VALUES\s*\((?P<values>[\S\s]*)\)"
     columns_pattern = r"(\w+)"
     values_pattern = sql_format.values_pattern
 

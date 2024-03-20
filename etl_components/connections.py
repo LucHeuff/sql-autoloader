@@ -11,17 +11,19 @@ config = dotenv_values(".env")
 
 
 SQLITE_INSERT_FORMAT = """
-    INSERT INTO <table> (<column_db_1>, <column_db_2>, ...)
+    INSERT (OR IGNORE) INTO <table> (<column_db_1>, <column_db_2>, ...)
     VALUES (:<column_df_1>, :<column_df_2>, ...)
 """
-SQLITE_VALUES_FORMAT = r":(\w+)"
+SQLITE_INSERT_PATTERN = r"^\s*INSERT(?: OR IGNORE)? INTO\s*(?P<table>\w+)\s*\((?P<columns>[\S\s]*)\)\s*VALUES\s*\((?P<values>[\S\s]*)\)"
+SQLITE_VALUES_PATTERN = r":(\w+)"
 
 
 POSTGRES_INSERT_FORMAT = """
     INSERT INTO <table> (<column_db_1>, <column_db_2>, ...)
     VALUES (%(<column_df_1>)s, %(<column_df_2>)s, ...)
 """
-POSTGRES_VALUES_FORMAT = r"%\((\w+)\)s"
+POSTGRES_INSERT_PATTERN = r"^\s*INSERT INTO\s*(?P<table>\w+)\s*\((?P<columns>[\S\s]*)\)\s*VALUES\s*\((?P<values>[\S\s]*)\)"
+POSTGRES_VALUES_PATTERN = r"%\((\w+)\)s"
 
 # SQLite and PostgreSQL use the same format for retrieval
 RETRIEVE_FORMAT = """
@@ -45,6 +47,7 @@ class SQLFormat:
     """Stores formats and patterns of SQL queries."""
 
     insert_format: str
+    insert_pattern: str
     values_pattern: str
     copy_available: bool
     retrieve_format: str = RETRIEVE_FORMAT
@@ -59,7 +62,8 @@ class SQLiteFormat(SQLFormat):
         """Add insert_format and values_format."""
         super().__init__(
             insert_format=SQLITE_INSERT_FORMAT,
-            values_pattern=SQLITE_VALUES_FORMAT,
+            insert_pattern=SQLITE_INSERT_PATTERN,
+            values_pattern=SQLITE_VALUES_PATTERN,
             copy_available=False,
         )
 
@@ -72,7 +76,8 @@ class PostgresFormat(SQLFormat):
         """Add insert_format and values_format."""
         super().__init__(
             insert_format=POSTGRES_INSERT_FORMAT,
-            values_pattern=POSTGRES_VALUES_FORMAT,
+            insert_pattern=POSTGRES_INSERT_PATTERN,
+            values_pattern=POSTGRES_VALUES_PATTERN,
             copy_available=True,
         )
 

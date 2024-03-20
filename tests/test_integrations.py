@@ -41,20 +41,17 @@ def test_integration_sqlite() -> None:
     )
     """
     insert_vehicle = """
-    INSERT INTO vehicle (name, invented) VALUES (:vehicle, :invented)
-    ON CONFLICT DO NOTHING
+    INSERT OR IGNORE INTO vehicle (name, invented) VALUES (:vehicle, :invented)
     """
     retrieve_vehicle = (
         "SELECT id as vehicle_id, name as vehicle, invented FROM vehicle"
     )
     insert_colour = """
-    INSERT INTO colour (name) VALUES (:colour)
-    ON CONFLICT DO NOTHING
+    INSERT OR IGNORE INTO colour (name) VALUES (:colour)
     """
     retrieve_colour = "SELECT id as colour_id, name as colour FROM colour"
     insert_vehicle_colour = """
-    INSERT INTO vehicle_colour (vehicle_id, colour_id) VALUES (:vehicle_id, :colour_id)
-    ON CONFLICT DO NOTHING
+    INSERT OR IGNORE INTO vehicle_colour (vehicle_id, colour_id) VALUES (:vehicle_id, :colour_id)
     """
 
     compare_query = """
@@ -88,6 +85,7 @@ def test_integration_sqlite() -> None:
             cursor, insert_colour, retrieve_colour, data
         )
         insert(cursor, insert_vehicle_colour, data)
+        insert(cursor, insert_vehicle_colour, data)  # repeat to test OR IGNORE
         compare(cursor, compare_query, orig_data)
 
 
@@ -178,9 +176,7 @@ def test_sqlite_copy_raises() -> None:
         naam TEXT UNIQUE
     )
     """
-    insert_vliegtuig = """INSERT INTO vliegtuig (naam) VALUES (:vliegtuig)
-    ON CONFLICT DO NOTHING
-    """
+    insert_vliegtuig = "INSERT INTO vliegtuig (naam) VALUES (:vliegtuig)"
     data = pd.DataFrame(
         {
             "vliegtuig": ["Boeing", "Airbus", "Bombardier", "Embraer"],
@@ -201,9 +197,7 @@ def test_sqlite_insert_and_retrieve_copy_raises() -> None:
         naam TEXT UNIQUE
     )
     """
-    insert_vliegtuig = """INSERT INTO vliegtuig (naam) VALUES (:vliegtuig)
-    ON CONFLICT DO NOTHING
-    """
+    insert_vliegtuig = "INSERT INTO vliegtuig (naam) VALUES (:vliegtuig)"
     retrieve_vliegtuig = (
         "SELECT id as vliegtuig_id, naam as vliegtuig FROM vliegtuig"
     )

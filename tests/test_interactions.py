@@ -171,21 +171,25 @@ def format_pair_generator(
 
 
 @composite
-def insert_query_generator(draw: DrawFn) -> str:
+def insert_query_generator(draw: DrawFn, sql_format: SQLFormat) -> str:
     """Generate insert query with table, columns and values placeholders.
 
     Args:
     ----
         draw: hypothesis draw function
+        sql_format: SQLFormat to determine insert query format
 
     Returns:
     -------
         query string with <table>, <columns> and <values> placeholders
 
     """
-    pattern = (
-        r"^\s+INSERT INTO\s+<table>\s+\(<columns>\)\s+VALUES\s+\(<values>\)"
-    )
+    if isinstance(sql_format, SQLiteFormat):
+        pattern = r"^\s+INSERT(?: OR IGNORE)? INTO\s+<table>\s+\(<columns>\)\s+VALUES\s+\(<values>\)"
+    elif isinstance(sql_format, PostgresFormat):
+        pattern = (
+            r"^\s+INSERT INTO\s+<table>\s+\(<columns>\)\s+VALUES\s+\(<values>\)"
+        )
     return draw(st.from_regex(pattern))
 
 
@@ -301,7 +305,7 @@ def parse_insert_query_strategy(draw: DrawFn) -> ParseInsertComponents:
     )
 
     query = (
-        draw(insert_query_generator())
+        draw(insert_query_generator(format_pair.sql_format))
         .replace("<table>", table)
         .replace("<columns>", columns_section)
         .replace("<values>", values_section)
@@ -388,7 +392,7 @@ def parse_invalid_insert_query_strategy(
     )
 
     # generating query and replacing
-    query = draw(insert_query_generator())
+    query = draw(insert_query_generator(format_pair.sql_format))
     query = (
         query.replace("<table>", table_section)
         .replace("<columns>", columns_section)
@@ -601,7 +605,7 @@ def parse_insert_and_retrieve_query_strategy(
     retrieve_columns = ", ".join(retrieve_pairs)
 
     insert_query = (
-        draw(insert_query_generator())
+        draw(insert_query_generator(format_pair.sql_format))
         .replace("<table>", table)
         .replace("<columns>", insert_columns)
         .replace("<values>", insert_values)
@@ -682,7 +686,7 @@ def parse_invalid_insert_and_retrieve_query_strategy(
     )
 
     insert_query = (
-        draw(insert_query_generator())
+        draw(insert_query_generator(format_pair.sql_format))
         .replace("<table>", table)
         .replace("<columns>", insert_columns)
         .replace("<values>", insert_values)
