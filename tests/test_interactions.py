@@ -227,7 +227,7 @@ def compare_query_generator(draw: DrawFn, n_tables: int) -> str:
     """
     select_pattern = r"^\s+SELECT\s+<columns>\s+FROM <table0>\s+"
     join_patterns = [
-        rf"JOIN <table{n+1}> ON <table{n+1}>\.<table{n}>_id = <table{n}>\.id\s+"
+        rf"(?:[A-Z]+\s)*JOIN <table{n+1}> ON <table{n+1}>\.<table{n}>_id = <table{n}>\.id\s+"
         for n in range(n_tables - 1)
     ]
     pattern = select_pattern + "".join(join_patterns)

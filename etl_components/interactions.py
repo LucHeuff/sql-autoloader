@@ -96,7 +96,6 @@ def parse_insert_query(
     correct = sql_format.insert_format
 
     query_pattern = sql_format.insert_pattern
-    # query_pattern = r"^\s*INSERT INTO\s*(?P<table>\w+)\s*\((?P<columns>[\S\s]*)\)\s*VALUES\s*\((?P<values>[\S\s]*)\)"
     columns_pattern = r"(\w+)"
     values_pattern = sql_format.values_pattern
 
@@ -272,7 +271,7 @@ def parse_compare_query(
     """
     correct = sql_format.compare_format
 
-    pattern = r"^\s*SELECT\s*(?P<columns>[\S\s]+)FROM \w+\s*(?:JOIN \w+ ON \w+\.\w+_id = \w+\.id\s*)*"
+    pattern = r"^\s*SELECT\s*(?P<columns>[\S\s]+)FROM \w+\s*(?:(?:[A-Z]+\s)*JOIN \w+ ON \w+\.\w+_id = \w+\.id\s*)*"
     match = re.match(pattern, query)
     if not match:
         message = f"Invalid compare query format. Correct format is\n{correct}"

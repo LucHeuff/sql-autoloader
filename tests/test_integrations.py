@@ -19,7 +19,6 @@ DATA = pd.DataFrame(
 
 def test_integration_sqlite() -> None:
     """Perform integration test using SQLite."""
-    # TODO ergens voor een insert_and_retrieve een DATE/pd.DateTime column toevoegen
     create_vehicle = """
     CREATE TABLE vehicle (
         id INTEGER PRIMARY KEY,
@@ -56,7 +55,7 @@ def test_integration_sqlite() -> None:
 
     compare_query = """
     SELECT vehicle.name as vehicle, invented, colour.name  as colour FROM vehicle
-    JOIN vehicle_colour ON vehicle_colour.vehicle_id = vehicle.id
+    INNER JOIN vehicle_colour ON vehicle_colour.vehicle_id = vehicle.id
     JOIN colour ON vehicle_colour.colour_id = colour.id
     """
 
@@ -130,7 +129,7 @@ def test_integration_postgres() -> None:
 
     compare_query = """
     SELECT vehicle.name as vehicle, colour.name as colour, invented FROM vehicle
-    JOIN vehicle_colour ON vehicle_colour.vehicle_id = vehicle.id
+    INNER JOIN vehicle_colour ON vehicle_colour.vehicle_id = vehicle.id
     JOIN colour ON vehicle_colour.colour_id = colour.id
     """
 
