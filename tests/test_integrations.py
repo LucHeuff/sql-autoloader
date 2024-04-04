@@ -61,15 +61,16 @@ def test_integration_sqlite() -> None:
 
     data = pd.DataFrame(
         {
-            "index": [0, 0, 0, 0],
-            "vehicle": ["bike", "boat", "train", "bike"],
+            "index": [0, 0, 0, 0, 0],
+            "vehicle": ["bike", "boat", "train", "bike", "plane"],
             "invented": [
                 "1912-04-05",
                 "1900-03-07",
                 "1850-03-03",
                 "1912-04-05",
+                None,
             ],
-            "colour": ["red", "yellow", "yellow", "blue"],
+            "colour": ["red", "yellow", "yellow", "blue", None],
         }
     ).set_index("index")
     orig_data = data.copy()
@@ -136,15 +137,16 @@ def test_integration_postgres() -> None:
     data = (
         pd.DataFrame(
             {
-                "index": [0, 0, 0, 0],
-                "vehicle": ["bike", "boat", "train", "bike"],
+                "index": [0, 0, 0, 0, 0],
+                "vehicle": ["bike", "boat", "train", "bike", None],
                 "invented": [
                     "1912-04-05",
                     "1900-03-07",
                     "1850-03-03",
                     "1912-04-05",
+                    "1900-01-01",
                 ],
-                "colour": ["red", "yellow", "yellow", "blue"],
+                "colour": ["red", "yellow", "yellow", "blue", None],
             }
         )
         .assign(invented=lambda df: pd.to_datetime(df.invented))
