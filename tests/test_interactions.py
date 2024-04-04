@@ -185,7 +185,7 @@ def insert_query_generator(draw: DrawFn, sql_format: SQLFormat) -> str:
 
     """
     if isinstance(sql_format, SQLiteFormat):
-        pattern = r"^\s+INSERT(?: OR IGNORE)? INTO\s+<table>\s+\(<columns>\)\s+VALUES\s+\(<values>\)"
+        pattern = r"^\s+INSERT(?: OR [A-Z]+)? INTO\s+<table>\s+\(<columns>\)\s+VALUES\s+\(<values>\)"
     elif isinstance(sql_format, PostgresFormat):
         pattern = (
             r"^\s+INSERT INTO\s+<table>\s+\(<columns>\)\s+VALUES\s+\(<values>\)"

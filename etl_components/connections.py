@@ -14,7 +14,7 @@ SQLITE_INSERT_FORMAT = """
     INSERT (OR IGNORE) INTO <table> (<column_db_1>, <column_db_2>, ...)
     VALUES (:<column_df_1>, :<column_df_2>, ...)
 """
-SQLITE_INSERT_PATTERN = r"^\s*INSERT(?: OR IGNORE)? INTO\s*(?P<table>\w+)\s*\((?P<columns>[\S\s]*)\)\s*VALUES\s*\((?P<values>[\S\s]*)\)"
+SQLITE_INSERT_PATTERN = r"^\s*INSERT(?: OR [A-Z]+)? INTO\s*(?P<table>\w+)\s*\((?P<columns>[\S\s]*)\)\s*VALUES\s*\((?P<values>[\S\s]*)\)"
 SQLITE_VALUES_PATTERN = r":(\w+)"
 
 
