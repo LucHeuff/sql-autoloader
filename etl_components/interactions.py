@@ -43,7 +43,11 @@ class CopyNotAvailableError(Exception):
     pass
 
 
-# ---- Common check functions
+class FailedMergeOnRetrieveError(Exception):
+    """Exception when merging in ids results in NaNs in an id column."""
+
+
+# ---- suppoert functions
 
 
 def check_columns_in_data(columns: list[str], data: pd.DataFrame) -> bool:
@@ -60,6 +64,25 @@ def check_columns_in_data(columns: list[str], data: pd.DataFrame) -> bool:
 
     """
     return all(column in data.columns for column in columns)
+
+
+def replace_na(data: pd.DataFrame) -> pd.DataFrame:
+    """Replace all values that pandas recognises as na with None.
+
+    Postgres does not consistently handle np.nan as NULL, and when returned
+    pandas will not recognise a NaN from Postgres as missing.
+    Hence the need to uniformly treat missing values.
+
+    Args:
+    ----
+        data: in which missing values are to be replaced with None
+
+    Returns:
+    -------
+        data where missing values are replaced with None
+
+    """
+    return data.fillna("NA_PLACEHOLDER").replace("NA_PLACEHOLDER", None)
 
 
 # ---- Parse functions
@@ -370,6 +393,7 @@ def _insert(  # noqa: PLR0913
         CopyNotAvailableError:
 
     """
+    data = replace_na(data)
     if sql_format.copy_available and use_copy:
         _insert_with_copy(cursor, data, parts)  # type: ignore
     elif not sql_format.copy_available and use_copy:
@@ -389,7 +413,7 @@ def insert(
         query: insert query of the following format:
             INSERT INTO <table> (<column_db_1>, <column_db_2>, ...)
             VALUES (...)  (format depending on sqlite or psycopg connection)
-            ...
+
         data: to be inserted into the database
         use_copy: whether to use COPY if the cursor supports this.
             NOTE: regular queries will be translated to COPY,
@@ -432,7 +456,7 @@ def _retrieve(
     orig_len = len(data)
 
     cursor.execute(query)  # type: ignore
-    ids_data = pd.DataFrame(cursor.fetchall())
+    ids_data = replace_na(pd.DataFrame(cursor.fetchall()))
 
     assert len(ids_data) > 0, "Retrieve query did not return any results."
 
@@ -443,13 +467,14 @@ def _retrieve(
         if col in ids_data.columns:
             ids_data[col] = pd.to_datetime(ids_data[col])
 
-    data = data.merge(ids_data, how="left", on=parts.values)
+    data = replace_na(data).merge(ids_data, how="left", on=parts.values)
     assert not len(data) < orig_len, "Rows were lost when merging on ids."
     assert not len(data) > orig_len, "Rows were duplicated when merging on ids."
 
-    assert (
-        not data.filter(regex="_id$").isna().any(axis=None)  # type: ignore
-    ), "Some id's were returned as NaN."
+    if (missing_ids := data.filter(regex="_id$").isna()).any(axis=None):  # type: ignore
+        missing_id_rows = data[missing_ids.any(axis=1)]
+        message = f"Some id's were returned as NaN:\n{str(missing_id_rows)}"
+        raise FailedMergeOnRetrieveError(message)
 
     if replace:
         non_id_columns = [col for col in parts.values if "_id" not in col]
@@ -556,7 +581,8 @@ def compare(cursor: Cursor, query: str, orig_data: pd.DataFrame) -> None:
 
     def preprocess(data: pd.DataFrame) -> pd.DataFrame:
         return (
-            data.sort_values(by=orig_data.columns.tolist())
+            replace_na(data)
+            .sort_values(by=orig_data.columns.tolist())
             .reset_index(drop=True)
             .fillna(np.nan)
         )

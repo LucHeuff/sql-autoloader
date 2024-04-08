@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -62,15 +63,15 @@ def test_integration_sqlite() -> None:
     data = pd.DataFrame(
         {
             "index": [0, 0, 0, 0, 0],
-            "vehicle": ["bike", "boat", "train", "bike", "plane"],
+            "vehicle": ["bike", "boat", "train", "bike", None],
             "invented": [
                 "1912-04-05",
                 "1900-03-07",
                 "1850-03-03",
                 "1912-04-05",
-                None,
+                np.nan,
             ],
-            "colour": ["red", "yellow", "yellow", "blue", None],
+            "colour": ["red", "yellow", "yellow", "blue", np.nan],
         }
     ).set_index("index")
     orig_data = data.copy()
@@ -138,7 +139,7 @@ def test_integration_postgres() -> None:
         pd.DataFrame(
             {
                 "index": [0, 0, 0, 0, 0],
-                "vehicle": ["bike", "boat", "train", "bike", None],
+                "vehicle": ["bike", "boat", "train", "bike", np.nan],
                 "invented": [
                     "1912-04-05",
                     "1900-03-07",
