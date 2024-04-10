@@ -430,13 +430,15 @@ def insert(
     _insert(cursor, query, data, sql_format, parts, use_copy=use_copy)
 
 
-def _retrieve(
+def _retrieve(  # noqa: PLR0913
     cursor: Cursor,
     query: str,
     data: pd.DataFrame,
     parts: QueryParts,
     *,
     replace: bool,
+    allow_shrinking: bool = False,
+    allow_duplication: bool = False,
 ) -> pd.DataFrame:
     """Perform retrieval from database.
 
@@ -447,6 +449,8 @@ def _retrieve(
         data: to attach ids to
         parts: QueryParts
         replace: if columns are to be dropped
+        allow_shrinking: if rows are allowed to be lost when merging ids
+        allow_duplication: if rows are allowed to be duplicated when merging ids
 
     Returns:
     -------
@@ -468,8 +472,12 @@ def _retrieve(
             ids_data[col] = pd.to_datetime(ids_data[col])
 
     data = replace_na(data).merge(ids_data, how="left", on=parts.values)
-    assert not len(data) < orig_len, "Rows were lost when merging on ids."
-    assert not len(data) > orig_len, "Rows were duplicated when merging on ids."
+    assert (
+        not len(data) < orig_len or allow_shrinking
+    ), "Rows were lost when merging on ids."
+    assert (
+        not len(data) > orig_len or allow_duplication
+    ), "Rows were duplicated when merging on ids."
 
     if (missing_ids := data.filter(regex="_id$").isna()).any(axis=None):  # type: ignore
         missing_id_rows = data[missing_ids.any(axis=1)]
@@ -484,7 +492,13 @@ def _retrieve(
 
 
 def retrieve_ids(
-    cursor: Cursor, query: str, data: pd.DataFrame, *, replace: bool = True
+    cursor: Cursor,
+    query: str,
+    data: pd.DataFrame,
+    *,
+    replace: bool = True,
+    allow_shrinking: bool = False,
+    allow_duplication: bool = False,
 ) -> pd.DataFrame:
     """Retrieve ids from database.
 
@@ -495,6 +509,8 @@ def retrieve_ids(
             SELECT id as <table>_id, <column_db_1> as <column_df_1>, <column_db_2> FROM <table>
         data: to which ids are to be merged
         replace: whether original columns without _id suffix are to be removed
+        allow_shrinking: if rows are allowed to be lost when merging ids
+        allow_duplication: if rows are allowed to be duplicated when merging ids
 
     Returns:
     -------
@@ -504,7 +520,15 @@ def retrieve_ids(
     """
     sql_format = get_sql_format(cursor)
     parts = parse_retrieve_query(query, data, sql_format)
-    return _retrieve(cursor, query, data, parts, replace=replace)
+    return _retrieve(
+        cursor,
+        query,
+        data,
+        parts,
+        replace=replace,
+        allow_shrinking=allow_shrinking,
+        allow_duplication=allow_duplication,
+    )
 
 
 def insert_and_retrieve_ids(
@@ -515,6 +539,8 @@ def insert_and_retrieve_ids(
     *,
     replace: bool = True,
     use_copy: bool = False,
+    allow_shrinking: bool = False,
+    allow_duplication: bool = False,
 ) -> pd.DataFrame:
     """Insert data into database and retrieve the newly created ids.
 
@@ -533,6 +559,8 @@ def insert_and_retrieve_ids(
             NOTE: regular queries will be translated to COPY,
             but COPY simply appends and does not support handling validity checks.
             Consistent behaviour is not guaranteed. Use at your own risk.
+        allow_shrinking: if rows are allowed to be lost when merging ids
+        allow_duplication: if rows are allowed to be duplicated when merging ids
 
     Returns:
     -------
@@ -548,7 +576,13 @@ def insert_and_retrieve_ids(
         cursor, insert_query, data, sql_format, insert_parts, use_copy=use_copy
     )
     return _retrieve(
-        cursor, retrieve_query, data, retrieve_parts, replace=replace
+        cursor,
+        retrieve_query,
+        data,
+        retrieve_parts,
+        replace=replace,
+        allow_shrinking=allow_shrinking,
+        allow_duplication=allow_duplication,
     )
 
 

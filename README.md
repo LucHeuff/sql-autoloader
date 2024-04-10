@@ -107,7 +107,9 @@ To connect to the database server, `PostgresCursor` requires the following crede
 - `cursor`: either a `PostgresCursor` or a `SQLiteCursor`
 - `query`: a retrieve query of the correct format (see below)
 - `data`: a `pandas.DataFrame` containing the columns to be merged
-- `replace`: whether the merge columns should be replaced with the IDs from the database.
+- `replace`: whether the merge columns should be replaced with the IDs from the database
+- `allow_shrinking`: allows the number of rows in data to shrink due to merging with ids from the database
+- `allow_duplication`: allows the number of rows in data to increase due to merging with ids from the database
 
 ### insert_and_retrieve_ids
 
@@ -119,6 +121,8 @@ To connect to the database server, `PostgresCursor` requires the following crede
 - `data`: a `pandas.DataFrame` containing at least the columns to be inserted.
 - `replace`: whether the merge columns should be replaced with the IDs from the database.
 - `use_copy`: allows inserting using the COPY protocol when using a `PostgresCursor`
+- `allow_shrinking`: allows the number of rows in data to shrink due to merging with ids from the database
+- `allow_duplication`: allows the number of rows in data to increase due to merging with ids from the database
 
 ### compare
 
