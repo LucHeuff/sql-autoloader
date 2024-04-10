@@ -639,4 +639,7 @@ def compare(
             check_like=True,
         )
     else:
-        assert orig_data.merge(data).shape == orig_data.shape
+        assert (
+            (merged_shape := orig_data.merge(data).shape)
+            == (orig_shape := orig_data.shape)
+        ), f"Original data and retrieved data do not have the same shape ({orig_shape=} != {merged_shape=})."
