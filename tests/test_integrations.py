@@ -1,6 +1,12 @@
+import string
+from datetime import date
+
+import hypothesis.strategies as st
 import numpy as np
 import pandas as pd
 import pytest
+from hypothesis import given
+from hypothesis.strategies import DrawFn, composite
 
 from etl_components.connections import PostgresCursor, SQLiteCursor
 from etl_components.interactions import (
@@ -10,16 +16,109 @@ from etl_components.interactions import (
     insert_and_retrieve_ids,
 )
 
-DATA = pd.DataFrame(
-    {
-        "voertuig": ["fiets", "boot", "trein", "fiets"],
-        "kleur": ["rood", "geel", "geel", "blauw"],
-    }
-)
+# ---- Generators
 
 
-def test_integration_sqlite() -> None:
-    """Perform integration test using SQLite."""
+@composite
+def elements_generator(draw: DrawFn, size: int) -> list:
+    """Generate list elements that can also be missing.
+
+    Args:
+    ----
+        draw: hypothesis draw function
+        size: number of elements
+
+    Returns:
+    -------
+        list of elements
+
+    """
+    elements = draw(
+        st.lists(
+            st.text(alphabet=string.ascii_lowercase, min_size=4, max_size=10),
+            min_size=size,
+            max_size=2 * size,
+            unique=True,
+        )
+    ) + [np.nan, None]
+    return draw(
+        st.lists(
+            st.sampled_from(elements), min_size=size, max_size=size, unique=True
+        )
+    )
+
+
+@composite
+def datetime_generator(draw: DrawFn, size: int) -> list[str]:
+    """Generate a list of date strings that can also be missing.
+
+    Args:
+    ----
+        draw: hypothesis draw function
+        size: number of elements
+
+    Returns:
+    -------
+        list of dates
+
+
+    """
+    elements = [
+        date.isoformat()
+        for date in draw(
+            st.lists(
+                st.dates(
+                    min_value=date(1900, 1, 1), max_value=date(2100, 1, 1)
+                ),
+                min_size=size,
+                max_size=2 * size,
+                unique=True,
+            )
+        )
+    ] + [
+        np.nan,
+        None,
+    ]
+    return draw(
+        st.lists(
+            st.sampled_from(elements), min_size=size, max_size=size, unique=True
+        )
+    )
+
+
+@composite
+def dataframe_generator(draw: DrawFn, rows: int = 5) -> pd.DataFrame:
+    """Generate a random dataframe where elements can be missing.
+
+    Args:
+    ----
+        draw: hypothesis draw function
+        rows: number of rows in dataframe
+
+    Returns:
+    -------
+        random dataframe
+
+    """
+    return pd.DataFrame(
+        {
+            "vehicle": draw(elements_generator(rows)),
+            "colour": draw(elements_generator(rows)),
+            "invented": draw(datetime_generator(rows)),
+        }
+    ).drop_duplicates()
+
+
+@given(data=dataframe_generator(), exact=st.booleans())
+def test_integration_sqlite(data: pd.DataFrame, *, exact: bool) -> None:
+    """Integration test for sqlite cursor.
+
+    Args:
+    ----
+        data: randomised dataset
+        exact: whether compare check should be exact
+
+    """
     create_vehicle = """
     CREATE TABLE vehicle (
         id INTEGER PRIMARY KEY,
@@ -60,21 +159,7 @@ def test_integration_sqlite() -> None:
     JOIN colour ON vehicle_colour.colour_id = colour.id
     """
 
-    data = pd.DataFrame(
-        {
-            "index": [0, 0, 0, 0, 0],
-            "vehicle": ["bike", "boat", "train", "bike", None],
-            "invented": [
-                "1912-04-05",
-                "1900-03-07",
-                "1850-03-03",
-                "1912-04-05",
-                np.nan,
-            ],
-            "colour": ["red", "yellow", "yellow", "blue", np.nan],
-        }
-    ).set_index("index")
-    orig_data = data.copy()
+    orig_data = data.copy() if exact else data.sample(frac=0.5).copy()
     with SQLiteCursor(":memory:") as cursor:
         cursor.execute(create_vehicle)
         cursor.execute(create_colour)
@@ -87,7 +172,7 @@ def test_integration_sqlite() -> None:
         )
         insert(cursor, insert_vehicle_colour, data)
         insert(cursor, insert_vehicle_colour, data)  # repeat to test OR IGNORE
-        compare(cursor, compare_query, orig_data)
+        compare(cursor, compare_query, orig_data, exact=exact)
 
 
 def test_integration_postgres() -> None:
@@ -155,6 +240,7 @@ def test_integration_postgres() -> None:
     )
     orig_data = data.copy()
     with PostgresCursor() as cursor:
+        cursor.execute("DROP owned by test_user")
         cursor.execute(create_vehicle)
         cursor.execute(create_colour)
         cursor.execute(create_vehicle_colour)
@@ -168,6 +254,87 @@ def test_integration_postgres() -> None:
 
         insert(cursor, insert_vehicle_colour, data)
         compare(cursor, compare_query, orig_data)
+
+
+def test_integration_postgres_not_exact() -> None:
+    """Perform integration test using Postgres."""
+    create_vehicle = """
+    CREATE TABLE vehicle (
+        id SERIAL PRIMARY KEY,
+        name TEXT UNIQUE,
+        invented DATE
+    )
+    """
+    create_colour = """
+    CREATE TABLE colour (
+        id SERIAL PRIMARY KEY,
+        name TEXT UNIQUE
+    )
+    """
+    create_vehicle_colour = """
+    CREATE TABLE vehicle_colour (
+        vehicle_id INT REFERENCES vehicle (id) ON DELETE CASCADE,
+        colour_id INT REFERENCES colour (id) ON DELETE CASCADE,
+        UNIQUE (vehicle_id, colour_id)
+    )
+    """
+    insert_vehicle = """
+    INSERT INTO vehicle (name, invented) VALUES (%(vehicle)s, %(invented)s)
+    ON CONFLICT DO NOTHING
+    """
+    retrieve_vehicle = (
+        "SELECT id as vehicle_id, name as vehicle, invented FROM vehicle"
+    )
+    insert_colour = """
+    INSERT INTO colour (name) VALUES (%(colour)s)
+    ON CONFLICT DO NOTHING
+    """
+    retrieve_colour = "SELECT id as colour_id, name as colour FROM colour"
+    insert_vehicle_colour = """
+    INSERT INTO vehicle_colour (vehicle_id, colour_id) VALUES (%(vehicle_id)s, %(colour_id)s)
+    ON CONFLICT DO NOTHING
+    """
+
+    compare_query = """
+    SELECT vehicle.name as vehicle, colour.name as colour, invented FROM vehicle
+    INNER JOIN vehicle_colour ON vehicle_colour.vehicle_id = vehicle.id
+    JOIN colour ON vehicle_colour.colour_id = colour.id
+    """
+
+    data = (
+        pd.DataFrame(
+            {
+                "index": [0, 0, 0, 0, 0],
+                "vehicle": ["bike", "boat", "train", "bike", np.nan],
+                "invented": [
+                    "1912-04-05",
+                    "1900-03-07",
+                    "1850-03-03",
+                    "1912-04-05",
+                    "1900-01-01",
+                ],
+                "colour": ["red", "yellow", "yellow", "blue", None],
+            }
+        )
+        .assign(invented=lambda df: pd.to_datetime(df.invented))
+        .set_index("index")
+    )
+    orig_data = data.sample(frac=0.5).copy()
+    with PostgresCursor() as cursor:
+        cursor.execute("DROP owned by test_user")
+        cursor.execute(create_vehicle)
+        cursor.execute(create_colour)
+        cursor.execute(create_vehicle_colour)
+        data = insert_and_retrieve_ids(
+            cursor, insert_vehicle, retrieve_vehicle, data
+        )
+
+        data = insert_and_retrieve_ids(
+            cursor, insert_colour, retrieve_colour, data
+        )
+
+        insert(cursor, insert_vehicle_colour, data)
+        compare(cursor, compare_query, orig_data, exact=False)
 
 
 def test_sqlite_copy_raises() -> None:
@@ -239,6 +406,7 @@ def test_postgres_copy() -> None:
     )
 
     with PostgresCursor() as cursor:
+        cursor.execute("DROP owned by test_user")
         cursor.execute(create_vliegtuig)
         insert(cursor, insert_vliegtuig, data, use_copy=True)
         cursor.execute("SELECT naam as vliegtuig FROM vliegtuig")
@@ -249,16 +417,16 @@ def test_postgres_copy() -> None:
 
 def test_postgres_insert_and_retrieve_copy() -> None:
     """Test whether inserting with copy works as intended."""
-    create_vliegtuig = """
+    create_vliegmachine = """
     CREATE TABLE vliegmachine (
         id SERIAL PRIMARY KEY,
         naam TEXT UNIQUE
     )
     """
-    insert_vliegtuig = """INSERT INTO vliegmachine (naam) VALUES (%(vliegtuig)s)
+    insert_vliegmachine = """INSERT INTO vliegmachine (naam) VALUES (%(vliegtuig)s)
     ON CONFLICT DO NOTHING
     """
-    retrieve_vliegtuig = (
+    retrieve_vliegmachine = (
         "SELECT id as vliegmachine_id, naam as vliegtuig FROM vliegmachine"
     )
     data = pd.DataFrame(
@@ -269,16 +437,17 @@ def test_postgres_insert_and_retrieve_copy() -> None:
     compare_data = data.assign(vliegmachine_id=[1, 2, 3, 4])
 
     with PostgresCursor() as cursor:
-        cursor.execute(create_vliegtuig)
+        cursor.execute("DROP owned by test_user")
+        cursor.execute(create_vliegmachine)
         test = insert_and_retrieve_ids(
             cursor,
-            insert_vliegtuig,
-            retrieve_vliegtuig,
+            insert_vliegmachine,
+            retrieve_vliegmachine,
             data,
             replace=False,
             use_copy=True,
         )
-        cursor.execute("SELECT naam as vliegtuig FROM vliegtuig")
+        cursor.execute("SELECT naam as vliegtuig FROM vliegmachine")
 
         pd.testing.assert_frame_equal(compare_data, test, check_like=True)
 
@@ -318,8 +487,9 @@ def test_postgres_datetime() -> None:
         }
     ).assign(date=lambda df: pd.to_datetime(df.date))
 
+    orig_data = data.copy()
     with PostgresCursor() as cursor:
-        orig_data = data.copy()
+        cursor.execute("DROP owned by test_user")
         cursor.execute(create_activity)
         cursor.execute(create_schedule)
         data = insert_and_retrieve_ids(

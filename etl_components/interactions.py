@@ -552,7 +552,9 @@ def insert_and_retrieve_ids(
     )
 
 
-def compare(cursor: Cursor, query: str, orig_data: pd.DataFrame) -> None:
+def compare(
+    cursor: Cursor, query: str, orig_data: pd.DataFrame, *, exact: bool = True
+) -> None:
     """Compare data in the database against the original dataset.
 
     Args:
@@ -570,6 +572,9 @@ def compare(cursor: Cursor, query: str, orig_data: pd.DataFrame) -> None:
             ...
         orig_data: original data to be stored in the database, before any processing.
                    This is used to compare the data in the database against.
+        exact: whether the data from the database must exactly match the orig_data.
+               if set to False, will check if orig_data is a subset of data in database.
+               (Default: True)
 
     """
     sql_format = get_sql_format(cursor)
@@ -593,8 +598,11 @@ def compare(cursor: Cursor, query: str, orig_data: pd.DataFrame) -> None:
         if col in data:
             data[col] = pd.to_datetime(data[col])
 
-    pd.testing.assert_frame_equal(
-        preprocess(orig_data),
-        preprocess(data),
-        check_like=True,
-    )
+    if exact:
+        pd.testing.assert_frame_equal(
+            preprocess(orig_data),
+            preprocess(data),
+            check_like=True,
+        )
+    else:
+        assert orig_data.merge(data).shape == orig_data.shape
