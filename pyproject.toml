@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "etl-components"
-version = "1.2.1"
+version = "1.2.2"
 description = "Components to build ETL pipelines using pandas and psycopg or sqlite"
 authors = ["Luc Heuff <10941592+LucHeuff@users.noreply.github.com>"]
 readme = "README.md"

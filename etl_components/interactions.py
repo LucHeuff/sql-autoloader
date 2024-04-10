@@ -639,7 +639,8 @@ def compare(
             check_like=True,
         )
     else:
+        # testing whether orig_data is a subset of data
         assert (
-            (merged_shape := orig_data.merge(data).shape)
+            (merged_shape := orig_data.merge(data).drop_duplicates().shape)
             == (orig_shape := orig_data.shape)
         ), f"Original data and retrieved data do not have the same shape ({orig_shape=} != {merged_shape=})."
