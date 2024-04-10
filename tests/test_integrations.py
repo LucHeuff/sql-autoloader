@@ -175,6 +175,75 @@ def test_integration_sqlite(data: pd.DataFrame, *, exact: bool) -> None:
         compare(cursor, compare_query, orig_data, exact=exact)
 
 
+@given(data=dataframe_generator())
+def test_integration_sqlite_asserts(data: pd.DataFrame) -> None:
+    """Integration test for sqlite cursor, checking whether pytest raises an assertion error when the data doesn't match.
+
+    Args:
+    ----
+        data: randomised dataset
+        exact: whether compare check should be exact
+
+    """
+    create_vehicle = """
+    CREATE TABLE vehicle (
+        id INTEGER PRIMARY KEY,
+        name TEXT UNIQUE,
+        invented DATE
+    )
+    """
+    create_colour = """
+    CREATE TABLE colour (
+        id INTEGER PRIMARY KEY,
+        name TEXT UNIQUE
+    )
+    """
+    create_vehicle_colour = """
+    CREATE TABLE vehicle_colour (
+        vehicle_id INT REFERENCES vehicle (id) ON DELETE CASCADE,
+        colour_id INT REFERENCES colour (id) ON DELETE CASCADE,
+        UNIQUE (vehicle_id, colour_id)
+    )
+    """
+    insert_vehicle = """
+    INSERT OR IGNORE INTO vehicle (name, invented) VALUES (:vehicle, :invented)
+    """
+    retrieve_vehicle = (
+        "SELECT id as vehicle_id, name as vehicle, invented FROM vehicle"
+    )
+    insert_colour = """
+    INSERT OR IGNORE INTO colour (name) VALUES (:colour)
+    """
+    retrieve_colour = "SELECT id as colour_id, name as colour FROM colour"
+    insert_vehicle_colour = """
+    INSERT OR IGNORE INTO vehicle_colour (vehicle_id, colour_id) VALUES (:vehicle_id, :colour_id)
+    """
+
+    compare_query = """
+    SELECT vehicle.name as vehicle, invented, colour.name  as colour FROM vehicle
+    INNER JOIN vehicle_colour ON vehicle_colour.vehicle_id = vehicle.id
+    JOIN colour ON vehicle_colour.colour_id = colour.id
+    """
+
+    orig_data = data.copy()
+    data = data.sample(frac=0.5)
+
+    with SQLiteCursor(":memory:") as cursor:
+        cursor.execute(create_vehicle)
+        cursor.execute(create_colour)
+        cursor.execute(create_vehicle_colour)
+        data = insert_and_retrieve_ids(
+            cursor, insert_vehicle, retrieve_vehicle, data
+        )
+        data = insert_and_retrieve_ids(
+            cursor, insert_colour, retrieve_colour, data
+        )
+        insert(cursor, insert_vehicle_colour, data)
+        insert(cursor, insert_vehicle_colour, data)  # repeat to test OR IGNORE
+        with pytest.raises(AssertionError):
+            compare(cursor, compare_query, orig_data, exact=False)
+
+
 def test_integration_postgres() -> None:
     """Perform integration test using Postgres."""
     create_vehicle = """
