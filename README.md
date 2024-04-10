@@ -127,7 +127,7 @@ To connect to the database server, `PostgresCursor` requires the following crede
 - `cursor`: either a `PostgresCursor` or a `SQLiteCursor`
 - `query`: a compare query of the correct format (see below)
 - `orig_data`: original data that was inserted into the database (devoid of ids).
-- 'exact': when True, data read from database must match what is in `orig_data`. When False, checks if `orig_data` is a subset of the data in the database.
+- `exact`: when True, data read from database must match what is in `orig_data`. When False, checks if `orig_data` is a subset of the data in the database.
 
 ## Formats
 
