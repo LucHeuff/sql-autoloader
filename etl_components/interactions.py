@@ -152,14 +152,15 @@ def parse_insert_query(
         Did you forget a column, or specify it in an incorrect format? Correct format is:\n{correct}
         """
         raise InvalidInsertQueryError(message)
-
     # Check if values appear in the data
     if not check_columns_in_data(values, data):
-        message = f"""Columns from data from which insert query should insert values do not match columns in data:
-        Value column are:
-            {values}
-        but available columns are:
-            {data.columns.tolist()}
+        columns = set(data.columns.tolist())
+        match = set(values) & columns
+        message = f"""Mismatch between columns in query and columns in data:
+        Columns in insert query without a match:
+            {list(set(values) - match)}
+        Available columns in data without match:
+            {list(columns - match)}
         """
         raise InvalidInsertQueryError(message)
 
@@ -212,11 +213,13 @@ def parse_retrieve_query(
 
     # Check if the values appear in the data
     if not check_columns_in_data(values, data):
-        message = f"""Names under which columns are retrieved from the database do not match column names in data:
-        Columns are retrieved as:
-            {values}
-        but available columns in data are:
-            {data.columns.tolist()}
+        columns = set(data.columns.tolist())
+        match = set(values) & columns
+        message = f"""Mismatch between column names retrieved from database and column names in data:
+        Retrieved columns without a match:
+            {list(set(values) - match)}
+        Available columns in data without a match:
+            {list(columns - match)}
         Are you using the right aliases?
         """
         raise InvalidRetrieveQueryError(message)
@@ -264,12 +267,13 @@ def parse_insert_and_retrieve_query(
     retrieve_pairs = list(zip(retrieve_parts.columns, retrieve_parts.values))
 
     if set(insert_pairs) != set(retrieve_pairs):
+        match_pairs = set(insert_pairs) & set(retrieve_pairs)
         message = f"""Insert and retrieve queries don't match.
-        columns name pairs in database and in dataframe should match between insert and retrieve queries, but received:
-        from insert query:
-            {insert_pairs}
-        from retrieve query:
-            {retrieve_pairs}
+        Column name pairs in database and in dataframe should match between insert and retrieve queries, but received:
+        Nonmatching pairs from insert query:
+            {list(set(insert_pairs) - match_pairs)}
+        Nonmatching pairs from retrieve query:
+            {list(set(retrieve_pairs) - match_pairs)}
         """
         raise InvalidInsertAndRetrieveQueryError(message)
 
@@ -305,14 +309,15 @@ def parse_compare_query(
     # splitting out parts: e.g "name" or "name as alias" as separate lists
     column_parts = [col.strip().split(" ") for col in columns_section]
     # the first elements now termed 'columns', last elements termed 'values'
-    values = [col[-1] for col in column_parts]
+    values = {col[-1] for col in column_parts}
 
-    if set(values) != set(orig_data.columns.tolist()):
-        message = f"""Invalid compare query format, column names read out from database do not match columns in [orig_data]:
-        Read out from database:
-            {values}
+    if values != (columns := set(orig_data.columns.tolist())):
+        match = values & columns
+        message = f"""Invalid compare query format, mismatch between columns read from database and columns in orig_data:
+        Read out from database without a match:
+            {list(values - match)}
         But columns in [orig_data]:
-            {orig_data.columns.tolist()}
+            {list(columns - match)}
         """
         raise InvalidCompareQueryError(message)
 
@@ -390,7 +395,7 @@ def _insert(  # noqa: PLR0913
 
     Raises:
     ------
-        CopyNotAvailableError:
+        CopyNotAvailableError: when use_copy is called but not supported for cursor.
 
     """
     data = replace_na(data)
@@ -491,7 +496,7 @@ def _retrieve(  # noqa: PLR0913
     return data
 
 
-def retrieve_ids(
+def retrieve_ids(  # noqa: PLR0913
     cursor: Cursor,
     query: str,
     data: pd.DataFrame,
@@ -531,7 +536,7 @@ def retrieve_ids(
     )
 
 
-def insert_and_retrieve_ids(
+def insert_and_retrieve_ids(  # noqa: PLR0913
     cursor: Cursor,
     insert_query: str,
     retrieve_query: str,
