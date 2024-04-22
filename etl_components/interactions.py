@@ -47,7 +47,7 @@ class FailedMergeOnRetrieveError(Exception):
     """Exception when merging in ids results in NaNs in an id column."""
 
 
-# ---- suppoert functions
+# ---- support functions
 
 
 def check_columns_in_data(columns: list[str], data: pd.DataFrame) -> bool:
@@ -595,6 +595,8 @@ def compare(
     cursor: Cursor, query: str, orig_data: pd.DataFrame, *, exact: bool = True
 ) -> None:
     """Compare data in the database against the original dataset.
+
+    NOTE: in assertion: left=original dataset, right=data from database.
 
     Args:
     ----
