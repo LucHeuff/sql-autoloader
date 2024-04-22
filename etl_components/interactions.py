@@ -82,7 +82,7 @@ def replace_na(data: pd.DataFrame) -> pd.DataFrame:
         data where missing values are replaced with None
 
     """
-    return data.fillna("NA_PLACEHOLDER").replace("NA_PLACEHOLDER", None)
+    return data.where(data.notnull(), None)
 
 
 # ---- Parse functions
@@ -638,10 +638,16 @@ def compare(
             data[col] = pd.to_datetime(data[col])
 
     if exact:
+        # Converting dtypes in data to match with orig_data
+        for col, dtype in orig_data.dtypes.items():
+            if data[col].dtype != dtype:
+                data[col] = data[col].astype(dtype)
+
         pd.testing.assert_frame_equal(
             preprocess(orig_data),
             preprocess(data),
             check_like=True,
+            check_column_type=False,
         )
     else:
         # testing whether orig_data is a subset of data

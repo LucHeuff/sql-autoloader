@@ -256,7 +256,7 @@ def test_integration_postgres() -> None:
     create_colour = """
     CREATE TABLE colour (
         id SERIAL PRIMARY KEY,
-        name TEXT UNIQUE
+        value INT UNIQUE
     )
     """
     create_vehicle_colour = """
@@ -274,17 +274,17 @@ def test_integration_postgres() -> None:
         "SELECT id as vehicle_id, name as vehicle, invented FROM vehicle"
     )
     insert_colour = """
-    INSERT INTO colour (name) VALUES (%(colour)s)
+    INSERT INTO colour (value) VALUES (%(colour)s)
     ON CONFLICT DO NOTHING
     """
-    retrieve_colour = "SELECT id as colour_id, name as colour FROM colour"
+    retrieve_colour = "SELECT id as colour_id, value as colour FROM colour"
     insert_vehicle_colour = """
     INSERT INTO vehicle_colour (vehicle_id, colour_id) VALUES (%(vehicle_id)s, %(colour_id)s)
     ON CONFLICT DO NOTHING
     """
 
     compare_query = """
-    SELECT vehicle.name as vehicle, colour.name as colour, invented FROM vehicle
+    SELECT vehicle.name as vehicle, colour.value as colour, invented FROM vehicle
     INNER JOIN vehicle_colour ON vehicle_colour.vehicle_id = vehicle.id
     JOIN colour ON vehicle_colour.colour_id = colour.id
     """
@@ -301,10 +301,13 @@ def test_integration_postgres() -> None:
                     "1912-04-05",
                     "1900-01-01",
                 ],
-                "colour": ["red", "yellow", "yellow", "blue", None],
+                "colour": [1, 2, 3, 4, None],
             }
         )
-        .assign(invented=lambda df: pd.to_datetime(df.invented))
+        .assign(
+            invented=lambda df: pd.to_datetime(df.invented),
+            colour=lambda df: df.colour.astype("Int64"),
+        )
         .set_index("index")
     )
     orig_data = data.copy()
