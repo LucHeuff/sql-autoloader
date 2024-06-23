@@ -21,7 +21,7 @@ def parse_insert(
     columns: dict[str, str],
     schema: dict[str, list[str]],
     data_columns: list[str],
-) -> tuple[str, dict[str, str]]:
+) -> None:
     """Parse input values for insert query.
 
     Checks whether table exists in the database, columns exist for that table,
@@ -67,5 +67,3 @@ def parse_insert(
         na_values = [val for val in df_values if val not in data_columns]
         message = f"values {na_values} do not exist in dataframe."
         raise InsertQueryError(message)
-
-    return table, columns

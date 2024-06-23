@@ -119,10 +119,8 @@ class DBConnector(ABC):
             data: DataFrame containing the data that needs to be inserted.
 
         """
-        query_parts = parse_insert(
-            table, columns, self.schema, list(data.columns)
-        )
-        query = create_insert_query(query_parts, self.parameterize_value)
+        parse_insert(table, columns, self.schema, list(data.columns))
+        query = self.create_insert_query(table, columns)
         with self as cursor:
             cursor.executemany(query, data.to_dicts())
 
