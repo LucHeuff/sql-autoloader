@@ -7,11 +7,11 @@ import polars as pl
 class Cursor(Protocol):
     """A cursor to interact with the database."""
 
-    def execute(self, *args: tuple, **kwargs: dict) -> None:
+    def execute(self, query: str) -> None:
         """Execute a query."""
         ...
 
-    def executemany(self, *args: tuple, **kwargs: dict) -> None:
+    def executemany(self, query: str, data: list[dict]) -> None:
         """Execute a query for many rows."""
         ...
 
