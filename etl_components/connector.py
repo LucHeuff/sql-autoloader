@@ -3,6 +3,25 @@ from typing import Protocol
 
 import polars as pl
 
+from etl_components.parsers import parse_insert
+
+# -- hulpfuncties
+
+
+def schema_to_string(schema: dict[str, list[str]]) -> str:
+    """Print a database schema to the console.
+
+    Args:
+    ----
+        schema: dictionary of format {table: [columns], ...}
+
+    """
+    tables = [
+        f"TABLE {table} {{\n  {'\n  '.join(schema[table])}\n}}"
+        for table in schema
+    ]
+    return "\n\n".join(tables)
+
 
 class Cursor(Protocol):
     """A cursor to interact with the database."""
@@ -100,9 +119,10 @@ class DBConnector(ABC):
         """
         self.schema = self.get_schema()
 
-    # TODO write function to convert database schema to nicely formatted string.
     def print_schema(self) -> None:
         """Print the current database schema."""
+        print(_schema_to_string(self.schema))  # noqa: T201
+
     @abstractmethod
     def create_insert_query(self, table: str, columns: dict[str, str]) -> str:
         """Create an insert query for this table and columns.
