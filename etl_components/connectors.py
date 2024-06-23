@@ -103,6 +103,20 @@ class DBConnector(ABC):
     # TODO write function to convert database schema to nicely formatted string.
     def print_schema(self) -> None:
         """Print the current database schema."""
+    @abstractmethod
+    def create_insert_query(self, table: str, columns: dict[str, str]) -> str:
+        """Create an insert query for this table and columns.
+
+        Args:
+        ----
+            table: name of table to insert to
+            columns: dictionary of {column: value, ...} pairs
+
+        Returns:
+        -------
+            valid insert query for this connector
+
+        """
         pass
 
     # TODO add functions for insert, retrieve, insert_and_retrieve and compare
