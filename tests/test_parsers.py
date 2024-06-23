@@ -152,18 +152,14 @@ def test_parse_insert(components: InsertQueryComponents) -> None:
         components: InsertQueryComponents
 
     """
-    assert (
-        parse_insert(
-            components.table,
-            components.columns,
-            components.schema,
-            components.data_columns,
-        )
-        == components.table
-    ), components.columns
+    assert parse_insert(
+        components.table,
+        components.columns,
+        components.schema,
+        components.data_columns,
+    ) == (components.table, components.columns)
 
 
-# TODO strategies and tests for failure modes
 @given(components=parse_insert_strategy(fail_table=True))
 def test_parse_insert_table_exception(
     components: InsertQueryComponents,
