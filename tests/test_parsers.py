@@ -7,6 +7,9 @@ from hypothesis import given
 from hypothesis.strategies import DrawFn, composite
 
 from etl_components.parsers import InsertQueryError, parse_insert
+from etl_components.schema import Column, Schema, Table
+
+# TODO something goes wrong with a circular import somehow
 
 
 @composite
@@ -83,48 +86,69 @@ class InsertQueryComponents:
 
     table: str
     columns: dict[str, str]
-    schema: dict[str, list[str]]
+    schema: Schema
     data_columns: list[str]
+    fail_table: bool
+    fail_columns: bool
+    fail_values: bool
 
 
 @composite
 def parse_insert_strategy(
     draw: DrawFn,
-    *,
-    fail_table: bool = False,
-    fail_columns: bool = False,
-    fail_values: bool = False,
 ) -> InsertQueryComponents:
     """Generate data from strategy for parse_insert().
 
     Args:
     ----
         draw: DrawFn
-        fail_table: if table should be incorrect
-        fail_columns: if columns should be incorrect
-        fail_values: if values should be incorrect
 
     Returns:
     -------
         InsertQueryComponents
 
     """
+    # generating failure cases
+    fail_table, fail_columns, fail_values = draw(
+        st.lists(st.booleans(), min_size=3, max_size=3)
+    )
+
     # generating candidate values
     table_candidates = draw(names_generator(6))
     column_candidates = draw(names_generator(12))
     values_candidates = draw(names_generator(12))
+    dtypes = draw(names_generator(6))
 
     # generating schema and correct table
-    schema = {
-        table: draw(samples(column_candidates[:6]))
-        for table in table_candidates[:5]
-    }
+
+    schema = Schema(
+        [
+            Table(
+                table,
+                [
+                    Column(name, dtype)
+                    for (name, dtype) in zip(
+                        draw(samples(column_candidates[:6])),
+                        draw(samples(dtypes, size=6)),
+                    )
+                ],
+            )
+            for table in table_candidates[:5]
+        ]
+    )
+
+    # schema = {
+    #     table: draw(samples(column_candidates[:6]))
+    #     for table in table_candidates[:5]
+    # }
     table = draw(st.sampled_from(table_candidates[:5]))
-    num_names = len(schema[table])  # tracking number of columns for this table
+    num_names = len(schema.table_names)
 
     # sampling column names
     # deliberately sampling from excluded set of column candidates when fail_columns
-    columns_from = column_candidates[6:] if fail_columns else schema[table]
+    columns_from = (
+        column_candidates[6:] if fail_columns else schema(table).column_names
+    )
     db_columns = draw(samples(columns_from, size=num_names))
 
     # sampling value names
@@ -140,7 +164,15 @@ def parse_insert_strategy(
     if fail_table:
         table = table_candidates[5]
 
-    return InsertQueryComponents(table, columns, schema, data_columns)
+    return InsertQueryComponents(
+        table,
+        columns,
+        schema,
+        data_columns,
+        fail_table,
+        fail_columns,
+        fail_values,
+    )
 
 
 @given(components=parse_insert_strategy())
@@ -152,72 +184,27 @@ def test_parse_insert(components: InsertQueryComponents) -> None:
         components: InsertQueryComponents
 
     """
-    assert (
-        parse_insert(
-            components.table,
-            components.columns,
-            components.schema,
-            components.data_columns,
-        )
-        is None
-    )
-
-
-@given(components=parse_insert_strategy(fail_table=True))
-def test_parse_insert_table_exception(
-    components: InsertQueryComponents,
-) -> None:
-    """Test whether parse_insert_query correctly throws an exception with unavailable table.
-
-    Args:
-    ----
-        components: InsertQueryComponents
-
-    """
-    with pytest.raises(InsertQueryError):
-        parse_insert(
-            components.table,
-            components.columns,
-            components.schema,
-            components.data_columns,
-        )
-
-
-@given(components=parse_insert_strategy(fail_columns=True))
-def test_parse_insert_columns_exception(
-    components: InsertQueryComponents,
-) -> None:
-    """Test whether parse_insert_query correctly throws an exception with incorrect columns.
-
-    Args:
-    ----
-        components: InsertQueryComponents
-
-    """
-    with pytest.raises(InsertQueryError):
-        parse_insert(
-            components.table,
-            components.columns,
-            components.schema,
-            components.data_columns,
-        )
-
-
-@given(components=parse_insert_strategy(fail_values=True))
-def test_parse_insert_values_exception(
-    components: InsertQueryComponents,
-) -> None:
-    """Test whether parse_insert_query correctly throws an exception with incorrect values.
-
-    Args:
-    ----
-        components: InsertQueryComponents
-
-    """
-    with pytest.raises(InsertQueryError):
-        parse_insert(
-            components.table,
-            components.columns,
-            components.schema,
-            components.data_columns,
+    # testing failure cases
+    if (
+        components.fail_table
+        or components.fail_columns
+        or components.fail_values
+    ):
+        with pytest.raises(InsertQueryError):
+            parse_insert(
+                components.table,
+                components.columns,
+                components.schema,
+                components.data_columns,
+            )
+    else:
+        # testing regular case
+        assert (
+            parse_insert(
+                components.table,
+                components.columns,
+                components.schema,
+                components.data_columns,
+            )
+            is None
         )

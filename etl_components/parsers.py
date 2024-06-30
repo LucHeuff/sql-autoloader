@@ -1,25 +1,16 @@
-class InsertQueryError(Exception):
+from etl_components.schema import Schema
+
+
+class QueryInputError(Exception):
     """Raised when something is wrong with the input for an insert query."""
 
     pass
 
 
-class RetrieveQueryError(Exception):
-    """Raised when something is wrong with the input for a retrieve query."""
-
-    pass
-
-
-class CompareQueryError(Exception):
-    """Raised when something is wrong with the input for a compare query."""
-
-    pass
-
-
-def parse_insert(
+def parse_input(
     table: str,
     columns: dict[str, str],
-    schema: dict[str, list[str]],
+    schema: Schema,
     data_columns: list[str],
 ) -> None:
     """Parse input values for insert query.
@@ -40,30 +31,31 @@ def parse_insert(
 
     Raises:
     ------
-        InsertQueryError: when table does not exist in database
+        QueryInputError: when table does not exist in database
                           when columns do not exist for that table
                           when values do not exist in the dataframe
 
     """
-    schema_tables = schema.keys()
-    if table not in schema_tables:
+    if table not in schema.table_names:
         message = f"'{table}' does not exists in database schema."
-        raise InsertQueryError(message)
-
-    schema_columns = schema[table]
+        raise QueryInputError(message)
 
     # parsing the columns and values that were entered
     db_columns = list(columns.keys())
     df_values = list(columns.values())
 
+    schema_table = schema(table)
+
     # checking if the provided columns exists in the database
-    if not all(col in schema_columns for col in db_columns):
-        na_columns = [col for col in db_columns if col not in schema_columns]
+    if not all(col in schema_table.column_names for col in db_columns):
+        na_columns = [
+            col for col in db_columns if col not in schema_table.column_names
+        ]
         message = f"columns {na_columns} do not exists in table {table}."
-        raise InsertQueryError(message)
+        raise QueryInputError(message)
 
     # checking if the provided values exist in the dataframe
     if not all(val in data_columns for val in df_values):
         na_values = [val for val in df_values if val not in data_columns]
         message = f"values {na_values} do not exist in dataframe."
-        raise InsertQueryError(message)
+        raise QueryInputError(message)
