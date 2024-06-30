@@ -3,24 +3,14 @@ from typing import Protocol
 
 import polars as pl
 
-from etl_components.parsers import parse_insert
+from etl_components.parsers import parse_input
+from etl_components.schema import Schema
 
-# -- hulpfuncties
 
+class MissingIDsOnJoinError(Exception):
+    """Used when joining upon retrieving from the database results in missing ids."""
 
-def schema_to_string(schema: dict[str, list[str]]) -> str:
-    """Print a database schema to the console.
-
-    Args:
-    ----
-        schema: dictionary of format {table: [columns], ...}
-
-    """
-    tables = [
-        f"TABLE {table} {{\n  {'\n  '.join(schema[table])}\n}}"
-        for table in schema
-    ]
-    return "\n\n".join(tables)
+    pass
 
 
 class Cursor(Protocol):
@@ -63,7 +53,7 @@ class DBConnector(ABC):
     """Abstract base class for connector with a database."""
 
     connection: Connection
-    schema: dict
+    schema: Schema
 
     def __enter__(self) -> Cursor:
         """Enter context manager by creating a cursor to interact with the database.
@@ -105,9 +95,8 @@ class DBConnector(ABC):
         """
         pass
 
-    # TODO think of convention in dictionary that is convenient
     @abstractmethod
-    def get_schema(self) -> dict:
+    def get_schema(self) -> Schema:
         """Retrieve schema (tables and their columns) from the database."""
         ...
 
@@ -121,7 +110,7 @@ class DBConnector(ABC):
 
     def print_schema(self) -> None:
         """Print the current database schema."""
-        print(_schema_to_string(self.schema))  # noqa: T201
+        print(str(self.schema))  # noqa: T201
 
     @abstractmethod
     def create_insert_query(self, table: str, columns: dict[str, str]) -> str:
@@ -139,7 +128,6 @@ class DBConnector(ABC):
         """
         pass
 
-    # TODO add functions for insert, retrieve, insert_and_retrieve and compare
     def insert(
         self, table: str, columns: dict[str, str], data: pl.DataFrame
     ) -> None:
@@ -153,15 +141,93 @@ class DBConnector(ABC):
             data: DataFrame containing the data that needs to be inserted.
 
         """
-        parse_insert(table, columns, self.schema, list(data.columns))
+        parse_input(table, columns, self.schema, list(data.columns))
         query = self.create_insert_query(table, columns)
         with self as cursor:
             cursor.executemany(query, data.to_dicts())
 
-    def retrieve_ids(
-        self, table: str, columns: list[tuple], data: pl.DataFrame
-    ) -> pl.DataFrame:
+    @abstractmethod
+    def create_retrieve_query(self, table: str, columns: dict[str, str]) -> str:
+        """Create a retrieve query for this table and columns.
+
+        Args:
+        ----
+            table: name of table to retrieve from
+            columns: dictionary of {column: value, ...} pairs
+
+        Returns:
+        -------
+            valid retrieve query for this connector
+
+        """
+        # TODO can this be a generic function outside of specific connector implementation?
         pass
+
+    def retrieve_ids(
+        self,
+        table: str,
+        columns: dict[str, str],
+        data: pl.DataFrame,
+        *,
+        replace: bool = True,
+        allow_duplication: bool = False,
+    ) -> pl.DataFrame:
+        """Retrieve ids from the database and join them to data.
+
+        Args:
+        ----
+            table: table to retrieve ids from
+            columns: dictionary linking column names in data with column names in dataframe
+                     Example {column_db1: column_df2, ...}
+            data: DataFrame containing the data for which ids need to be retrieved and joined
+            replace: whether non-id columns from provided list are to be dropped after joining
+            allow_duplication: if rows are allowed to be duplicated when merging ids
+
+        Returns:
+        -------
+            data with ids from database added, or replacing original columns
+
+
+        Raises:
+        ------
+            MissingIDsOnJoinError: if joining results in missing ids
+
+        """
+        parse_input(table, columns, self.schema, list(data.columns))
+        query = self.create_retrieve_query(table, columns)
+        with self as cursor:
+            cursor.execute(query)
+            db_data = pl.DataFrame(cursor.fetchall())
+
+        assert len(db_data) > 0, "Retrieve query died not return any results."
+
+        # joining retrieved ids from database
+        orig_len = len(data)
+        data = data.join(db_data, how="left")
+
+        # checking if data shrank (should never happen for a left join) or rows were duplicated
+        assert not len(data) < orig_len, "Rows were lost when joining on ids."
+        assert (
+            not len(data) > orig_len or allow_duplication
+        ), "Rows were duplicated when joining on ids."
+
+        # checking if some of the retrieved ids are empty
+        if data.select(pl.col("^.*_id$")).null_count().sum_horizontal().item():
+            rows_with_missings = data.filter(
+                pl.any_horizontal(pl.col("^.*_id$").is_null())
+            )
+            message = (
+                f"Some id's were returned as NaN:\n{str(rows_with_missings)}"
+            )
+            raise MissingIDsOnJoinError(message)
+
+        if replace:
+            non_id_columns = [
+                val for val in columns.values() if "_id" not in val
+            ]
+            data = data.drop(non_id_columns)
+
+        return data
 
     def insert_and_retrieve_ids(
         self, table: str, columns: list[tuple], data: pl.DataFrame
