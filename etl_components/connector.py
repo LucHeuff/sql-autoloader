@@ -3,6 +3,7 @@ from typing import Protocol
 
 import polars as pl
 
+from etl_components.dataframe_operations import merge_ids
 from etl_components.parsers import parse_input
 from etl_components.schema import Schema
 
@@ -192,34 +193,7 @@ class DBConnector(ABC):
         ------
             MissingIDsOnJoinError: if joining results in missing ids
 
-        """
-        parse_input(table, columns, self.schema, list(data.columns))
-        query = self.create_retrieve_query(table, columns)
-        with self as cursor:
-            cursor.execute(query)
-            db_data = pl.DataFrame(cursor.fetchall())
-
-        assert len(db_data) > 0, "Retrieve query died not return any results."
-
-        # joining retrieved ids from database
-        orig_len = len(data)
-        data = data.join(db_data, how="left")
-
-        # checking if data shrank (should never happen for a left join) or rows were duplicated
-        assert not len(data) < orig_len, "Rows were lost when joining on ids."
-        assert (
-            not len(data) > orig_len or allow_duplication
-        ), "Rows were duplicated when joining on ids."
-
-        # checking if some of the retrieved ids are empty
-        if data.select(pl.col("^.*_id$")).null_count().sum_horizontal().item():
-            rows_with_missings = data.filter(
-                pl.any_horizontal(pl.col("^.*_id$").is_null())
-            )
-            message = (
-                f"Some id's were returned as NaN:\n{str(rows_with_missings)}"
-            )
-            raise MissingIDsOnJoinError(message)
+        data = merge_ids(data, db_fetch, allow_duplication=allow_duplication)
 
         if replace:
             non_id_columns = [
