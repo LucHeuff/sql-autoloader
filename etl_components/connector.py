@@ -28,6 +28,10 @@ class Cursor(Protocol):
     def fetchall(self) -> list[dict]:
         """Return results from query."""
         ...
+    def close(self) -> None:
+        """Close the cursor."""
+        ...
+
 
 
 class Connection(Protocol):
@@ -50,21 +54,25 @@ class Connection(Protocol):
         ...
 
 
+class Connector(Protocol):
+    """Facilitates a connection with a database."""
+
+    def connect(self, credentials: str) -> Connection:
+        """Connect to the database."""
+        ...
+
+
 class DBConnector(ABC):
     """Abstract base class for connector with a database."""
 
+    connector: Connector
     connection: Connection
+    credentials: str
     schema: Schema
 
-    def __enter__(self) -> Cursor:
-        """Enter context manager by creating a cursor to interact with the database.
-
-        Returns
-        -------
-            cursor to interact with the database.
-
-        """
-        return self.connection.cursor()
+    def __enter__(self) -> None:
+        """Enter context manager by creating a connection with the database."""
+        self.connection = self.connector.connect(self.credentials)
 
     def __exit__(self, *exception: tuple) -> None:
         """Exit context manager by committing or rolling back on exception, and closing the connection.
@@ -76,10 +84,9 @@ class DBConnector(ABC):
         """
         if exception:
             self.connection.rollback()
-            self.connection.close()
         else:
             self.connection.commit()
-            self.connection.close()
+        self.connection.close()
 
     @abstractmethod
     def parameterize_value(self, value: str) -> str:
@@ -138,6 +145,10 @@ class DBConnector(ABC):
         ----
             table: name of the table to insert into
             columns: dictionary linking column names in data with column names in dataframe
+        # Executing query
+        cursor = self.connection.cursor()
+        cursor.executemany(query, data.to_dicts())
+        cursor.close()
                      Example {column_db1: column_df2, ...}
             data: DataFrame containing the data that needs to be inserted.
 
@@ -191,7 +202,11 @@ class DBConnector(ABC):
 
         Raises:
         ------
-            MissingIDsOnJoinError: if joining results in missing ids
+        # Executing query
+        cursor = self.connection.cursor()
+        cursor.execute(query)
+        db_fetch = cursor.fetchall()
+        cursor.close()
 
         data = merge_ids(data, db_fetch, allow_duplication=allow_duplication)
 
