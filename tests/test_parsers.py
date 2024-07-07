@@ -6,10 +6,57 @@ import pytest
 from hypothesis import given
 from hypothesis.strategies import DrawFn, composite
 
-from etl_components.parsers import InsertQueryError, parse_insert
+from etl_components.parsers import QueryInputError, parse_input
 from etl_components.schema import Column, Schema, Table
 
-# TODO something goes wrong with a circular import somehow
+# ---- manual tests since hypothesis keeps taking forever to show results
+
+mock_schema = Schema(
+    [
+        Table(
+            "fiets",
+            [
+                Column("merk", "VARCHAR"),
+                Column("prijs", "INT"),
+                Column("kleur", "ENUM"),
+            ],
+        ),
+        Table(
+            "auto",
+            [
+                Column("merk", "VARCHAR"),
+                Column("prijs", "INT"),
+                Column("brandstof", "CHAR"),
+            ],
+        ),
+    ]
+)
+
+
+def test_parse_input() -> None:
+    """Test whether parse_input gives the correct results."""
+    table = "fiets"
+    columns = ["merk", "prijs"]
+    assert parse_input(table, columns, mock_schema) is None
+
+
+def test_parse_input_fail_table() -> None:
+    """Test whether parse_input throws an exception if table does not appear in schema."""
+    table = "trein"
+    columns = ["merk", "prijs"]
+    with pytest.raises(QueryInputError):
+        parse_input(table, columns, mock_schema)
+
+
+def test_parse_input_fail_columns() -> None:
+    """Test whether parse_input throws an exception if columns do not appear in table schema."""
+    table = "fiets"
+    columns = ["boot", "trein"]
+    with pytest.raises(QueryInputError):
+        parse_input(table, columns, mock_schema)
+
+
+# ---- Grondigere test met hypothesis
 
 
 @composite
@@ -85,12 +132,10 @@ class InsertQueryComponents:
     """Encapsulates output from parse_insert_strategy()."""
 
     table: str
-    columns: dict[str, str]
+    columns: list[str]
     schema: Schema
-    data_columns: list[str]
     fail_table: bool
     fail_columns: bool
-    fail_values: bool
 
 
 @composite
@@ -109,15 +154,12 @@ def parse_insert_strategy(
 
     """
     # generating failure cases
-    fail_table, fail_columns, fail_values = draw(
-        st.lists(st.booleans(), min_size=3, max_size=3)
-    )
+    fail_table = draw(st.booleans())
+    fail_columns = draw(st.booleans())
 
     # generating candidate values
     table_candidates = draw(names_generator(6))
     column_candidates = draw(names_generator(12))
-    values_candidates = draw(names_generator(12))
-    dtypes = draw(names_generator(6))
 
     # generating schema and correct table
 
@@ -126,41 +168,24 @@ def parse_insert_strategy(
             Table(
                 table,
                 [
-                    Column(name, dtype)
-                    for (name, dtype) in zip(
-                        draw(samples(column_candidates[:6])),
-                        draw(samples(dtypes, size=6)),
-                    )
+                    Column(name, "EMPTY")
+                    for name in draw(samples(column_candidates[:6]))
                 ],
             )
             for table in table_candidates[:5]
         ]
     )
-
-    # schema = {
-    #     table: draw(samples(column_candidates[:6]))
-    #     for table in table_candidates[:5]
-    # }
+    # drawing table from the first 5 table candidates
     table = draw(st.sampled_from(table_candidates[:5]))
-    num_names = len(schema.table_names)
 
     # sampling column names
     # deliberately sampling from excluded set of column candidates when fail_columns
     columns_from = (
         column_candidates[6:] if fail_columns else schema(table).column_names
     )
-    db_columns = draw(samples(columns_from, size=num_names))
+    columns = draw(samples(columns_from))
 
-    # sampling value names
-    # deliberately sampling from excluded set of column candidates when fail_columns
-    data_columns = draw(samples(values_candidates[:6], size=num_names))
-    values_from = values_candidates[6:] if fail_values else data_columns
-    df_values = draw(samples(values_from, size=num_names))
-
-    # generating column dict
-    columns = dict(zip(db_columns, df_values))
-
-    # setting the remaining table name when fail_table
+    # setting the sixth table name when fail_table
     if fail_table:
         table = table_candidates[5]
 
@@ -168,10 +193,8 @@ def parse_insert_strategy(
         table,
         columns,
         schema,
-        data_columns,
         fail_table,
         fail_columns,
-        fail_values,
     )
 
 
@@ -185,26 +208,12 @@ def test_parse_insert(components: InsertQueryComponents) -> None:
 
     """
     # testing failure cases
-    if (
-        components.fail_table
-        or components.fail_columns
-        or components.fail_values
-    ):
-        with pytest.raises(InsertQueryError):
-            parse_insert(
-                components.table,
-                components.columns,
-                components.schema,
-                components.data_columns,
-            )
+    if components.fail_table or components.fail_columns:
+        with pytest.raises(QueryInputError):
+            parse_input(components.table, components.columns, components.schema)
     else:
         # testing regular case
         assert (
-            parse_insert(
-                components.table,
-                components.columns,
-                components.schema,
-                components.data_columns,
-            )
+            parse_input(components.table, components.columns, components.schema)
             is None
         )
