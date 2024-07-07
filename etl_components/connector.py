@@ -8,12 +8,6 @@ from etl_components.parsers import parse_input
 from etl_components.schema import Schema
 
 
-class MissingIDsOnJoinError(Exception):
-    """Used when joining upon retrieving from the database results in missing ids."""
-
-    pass
-
-
 class Cursor(Protocol):
     """A cursor to interact with the database."""
 
@@ -28,10 +22,10 @@ class Cursor(Protocol):
     def fetchall(self) -> list[dict]:
         """Return results from query."""
         ...
+
     def close(self) -> None:
         """Close the cursor."""
         ...
-
 
 
 class Connection(Protocol):
@@ -121,13 +115,13 @@ class DBConnector(ABC):
         print(str(self.schema))  # noqa: T201
 
     @abstractmethod
-    def create_insert_query(self, table: str, columns: dict[str, str]) -> str:
+    def create_insert_query(self, into: str, columns: list[str]) -> str:
         """Create an insert query for this table and columns.
 
         Args:
         ----
-            table: name of table to insert to
-            columns: dictionary of {column: value, ...} pairs
+            into: name of table to insert to
+            columns: names of columns to insert
 
         Returns:
         -------
@@ -137,29 +131,35 @@ class DBConnector(ABC):
         pass
 
     def insert(
-        self, table: str, columns: dict[str, str], data: pl.DataFrame
+        self,
+        data: pl.DataFrame,
+        table: str,
+        columns: dict[str, str] | None = None,
     ) -> None:
         """Insert data into database.
 
         Args:
         ----
+            data: DataFrame containing the data that needs to be inserted.
             table: name of the table to insert into
-            columns: dictionary linking column names in data with column names in dataframe
+            columns: (Optional) dictionary linking column names in data with column names in dataframe
+                     Example {data_name: db_name, ...}
+                     If left empty, will assume that column names to insert
+                     from data match column names in the database
+
+        """
+        if columns is not None:
+            # check if this does not
+            data = data.rename(columns)
+        parse_input(table, list(data.columns), self.schema)
+        query = self.create_insert_query(table, list(data.columns))
         # Executing query
         cursor = self.connection.cursor()
         cursor.executemany(query, data.to_dicts())
         cursor.close()
-                     Example {column_db1: column_df2, ...}
-            data: DataFrame containing the data that needs to be inserted.
-
-        """
-        parse_input(table, columns, self.schema, list(data.columns))
-        query = self.create_insert_query(table, columns)
-        with self as cursor:
-            cursor.executemany(query, data.to_dicts())
 
     @abstractmethod
-    def create_retrieve_query(self, table: str, columns: dict[str, str]) -> str:
+    def create_retrieve_query(self, table: str, columns: list[str]) -> str:
         """Create a retrieve query for this table and columns.
 
         Args:
@@ -177,9 +177,9 @@ class DBConnector(ABC):
 
     def retrieve_ids(
         self,
-        table: str,
-        columns: dict[str, str],
         data: pl.DataFrame,
+        table: str,
+        columns: dict[str, str] | None = None,
         *,
         replace: bool = True,
         allow_duplication: bool = False,
@@ -188,10 +188,12 @@ class DBConnector(ABC):
 
         Args:
         ----
-            table: table to retrieve ids from
-            columns: dictionary linking column names in data with column names in dataframe
-                     Example {column_db1: column_df2, ...}
             data: DataFrame containing the data for which ids need to be retrieved and joined
+            table: table to retrieve ids from
+            columns: (Optional) dictionary linking column names in data with column names in dataframe
+                     Example {data_name: db_name, ...}
+                     If left empty, will assume that column names to retrieve ids on
+                     from data match column names in the database
             replace: whether non-id columns from provided list are to be dropped after joining
             allow_duplication: if rows are allowed to be duplicated when merging ids
 
@@ -199,9 +201,12 @@ class DBConnector(ABC):
         -------
             data with ids from database added, or replacing original columns
 
+        """
+        if columns is not None:
+            data = data.rename(columns)
 
-        Raises:
-        ------
+        parse_input(table, list(data.columns), self.schema)
+        query = self.create_retrieve_query(table, list(data.columns))
         # Executing query
         cursor = self.connection.cursor()
         cursor.execute(query)
@@ -211,10 +216,14 @@ class DBConnector(ABC):
         data = merge_ids(data, db_fetch, allow_duplication=allow_duplication)
 
         if replace:
-            non_id_columns = [
-                val for val in columns.values() if "_id" not in val
-            ]
-            data = data.drop(non_id_columns)
+            # Use table schema to determine which non_id columns can be dropped.
+            schema_columns = self.schema(table).column_names
+            non_id_columns = [col for col in schema_columns if "_id" not in col]
+            data = data.drop(non_id_columns, strict=False)  # type: ignore
+        elif not replace and columns is not None:
+            # making sure to reverse the naming of columns if they are not replaced
+            reverse_columns = {v: k for (k, v) in columns.items()}
+            data = data.rename(reverse_columns)
 
         return data
 
