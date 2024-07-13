@@ -62,6 +62,3 @@ def test_merge_ids_raises_exception() -> None:
     ]
     with pytest.raises(MissingIDsError):
         merge_ids(data, db_fetch)
-
-
-# TODO write comprehensive test with hypothesis to test out all combination paths.

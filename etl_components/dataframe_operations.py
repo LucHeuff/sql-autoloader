@@ -7,7 +7,6 @@ class MissingIDsError(Exception):
     pass
 
 
-# TODO write tests!
 def merge_ids(
     data: pl.DataFrame, db_fetch: list[dict], *, allow_duplication: bool = False
 ) -> pl.DataFrame:
