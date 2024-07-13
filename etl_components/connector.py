@@ -1,10 +1,15 @@
 from abc import ABC, abstractmethod
-from typing import Protocol
+from contextlib import contextmanager
+from typing import Iterator, Protocol, Self
 
 import polars as pl
 
 from etl_components.dataframe_operations import merge_ids
 from etl_components.parsers import parse_input
+from etl_components.query_generators import (
+    create_insert_query,
+    create_retrieve_query,
+)
 from etl_components.schema import Schema
 
 
@@ -63,10 +68,15 @@ class DBConnector(ABC):
     connection: Connection
     credentials: str
     schema: Schema
+    insert_prefix: str
+    insert_postfix: str
 
-    def __enter__(self) -> None:
+    # ---- Context managers
+
+    def __enter__(self) -> Self:
         """Enter context manager by creating a connection with the database."""
         self.connection = self.connector.connect(self.credentials)
+        return self
 
     def __exit__(self, *exception: tuple) -> None:
         """Exit context manager by committing or rolling back on exception, and closing the connection.
@@ -82,6 +92,15 @@ class DBConnector(ABC):
             self.connection.commit()
         self.connection.close()
 
+    @contextmanager
+    def cursor(self) -> Iterator[Cursor]:
+        """Context manager for cursor."""
+        cursor = self.connection.cursor()
+        try:
+            yield cursor
+        finally:
+            cursor.close()
+
     @abstractmethod
     def parameterize_value(self, value: str) -> str:
         """Convert a value to a parameter using the syntax for this connector.
@@ -92,10 +111,10 @@ class DBConnector(ABC):
 
         Returns:
         -------
-            paramterized value
+            parameterized value
 
         """
-        pass
+        ...
 
     @abstractmethod
     def get_schema(self) -> Schema:
@@ -113,22 +132,6 @@ class DBConnector(ABC):
     def print_schema(self) -> None:
         """Print the current database schema."""
         print(str(self.schema))  # noqa: T201
-
-    @abstractmethod
-    def create_insert_query(self, into: str, columns: list[str]) -> str:
-        """Create an insert query for this table and columns.
-
-        Args:
-        ----
-            into: name of table to insert to
-            columns: names of columns to insert
-
-        Returns:
-        -------
-            valid insert query for this connector
-
-        """
-        pass
 
     def insert(
         self,
@@ -149,31 +152,20 @@ class DBConnector(ABC):
 
         """
         if columns is not None:
-            # check if this does not
             data = data.rename(columns)
+
         parse_input(table, list(data.columns), self.schema)
-        query = self.create_insert_query(table, list(data.columns))
+        query = create_insert_query(
+            table,
+            list(data.columns),
+            self.insert_prefix,
+            self.insert_postfix,
+            self.parameterize_value,
+        )
         # Executing query
-        cursor = self.connection.cursor()
-        cursor.executemany(query, data.to_dicts())
-        cursor.close()
-
-    @abstractmethod
-    def create_retrieve_query(self, table: str, columns: list[str]) -> str:
-        """Create a retrieve query for this table and columns.
-
-        Args:
-        ----
-            table: name of table to retrieve from
-            columns: dictionary of {column: value, ...} pairs
-
-        Returns:
-        -------
-            valid retrieve query for this connector
-
-        """
-        # TODO can this be a generic function outside of specific connector implementation?
-        pass
+        with self.cursor() as cursor:
+            # TODO replace .to_dicts() with something more generic if I want to support pandas
+            cursor.executemany(query, data.to_dicts())
 
     def retrieve_ids(
         self,
@@ -206,12 +198,11 @@ class DBConnector(ABC):
             data = data.rename(columns)
 
         parse_input(table, list(data.columns), self.schema)
-        query = self.create_retrieve_query(table, list(data.columns))
+        query = create_retrieve_query(table, list(data.columns))
         # Executing query
-        cursor = self.connection.cursor()
-        cursor.execute(query)
-        db_fetch = cursor.fetchall()
-        cursor.close()
+        with self.cursor() as cursor:
+            cursor.execute(query)
+            db_fetch = cursor.fetchall()
 
         data = merge_ids(data, db_fetch, allow_duplication=allow_duplication)
 
@@ -228,9 +219,39 @@ class DBConnector(ABC):
         return data
 
     def insert_and_retrieve_ids(
-        self, table: str, columns: list[tuple], data: pl.DataFrame
+        self,
+        data: pl.DataFrame,
+        table: str,
+        columns: dict[str, str],
+        *,
+        replace: bool = True,
+        allow_duplication: bool = False,
     ) -> pl.DataFrame:
-        pass
+        """Insert data into database and retrieve ids to join them to data.
+
+            data: DataFrame containing the data for which ids need to be retrieved and joined
+            table: table to retrieve ids from
+            columns: (Optional) dictionary linking column names in data with column names in dataframe
+                     Example {data_name: db_name, ...}
+                     If left empty, will assume that column names to retrieve ids on
+                     from data match column names in the database
+            replace: whether non-id columns from provided list are to be dropped after joining
+            allow_duplication: if rows are allowed to be duplicated when merging ids
+
+        Returns
+        -------
+            data with ids from database added, or replacing original columns
+
+
+        """
+        self.insert(data, table, columns)
+        return self.retrieve_ids(
+            data,
+            table,
+            columns,
+            replace=replace,
+            allow_duplication=allow_duplication,
+        )
 
     def compare(
         self, columns: list[tuple], data: pl.DataFrame, *, exact: bool = True
