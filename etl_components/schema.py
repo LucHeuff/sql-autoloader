@@ -56,7 +56,8 @@ class Table:
 
         """
         if column_name not in self.column_names:
-            raise ValueError(f"'{column_name}' doe snot appear in table.")
+            message = f"'{column_name}' doe snot appear in table."
+            raise ValueError(message)
         return self.columns[self.column_names.index(column_name)]
 
     def __str__(self) -> str:
@@ -106,7 +107,8 @@ class Schema:
 
         """
         if table_name not in self.table_names:
-            raise ValueError(f"'{table_name}' does not appear in schema.")
+            message = f"'{table_name}' does not appear in schema."
+            raise ValueError(message)
         return self.tables[self.table_names.index(table_name)]
 
     def __str__(self) -> str:
