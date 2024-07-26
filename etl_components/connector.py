@@ -95,23 +95,6 @@ class DBConnector(ABC):
 
     # ---- methods related to generating queries
 
-    # ---- methods related to generating queries
-
-    @abstractmethod
-    def get_insert_query(self, table: str) -> str:
-        """Get an insert query for this Connector.
-
-        Args:
-        ----
-            table: to insert into
-
-        Returns:
-        -------
-            Valid insert query for this Connector
-
-        """
-        ...
-
     @abstractmethod
     def get_insert_query(self, table: str) -> str:
         """Get an insert query for this Connector.
@@ -283,7 +266,5 @@ class DBConnector(ABC):
             allow_duplication=allow_duplication,
         )
 
-    def compare(
-        self, columns: list[tuple], data: pl.DataFrame, *, exact: bool = True
-    ):
-        pass
+    # def compare(self, columns: list[tuple], data, *, exact: bool = True):
+    #     pass
