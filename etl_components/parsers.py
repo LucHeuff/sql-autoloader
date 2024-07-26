@@ -4,8 +4,6 @@ from etl_components.schema import Schema
 class QueryInputError(Exception):
     """Raised when something is wrong with the input for an insert query."""
 
-    pass
-
 
 def parse_input(
     table: str,
@@ -38,4 +36,9 @@ def parse_input(
     if not any(col in schema_table.column_names for col in columns):
         message = f"None of [{columns}] exist in {table}. Table schema is:\n{schema_table}"
         raise QueryInputError(message)
+
+    # TODO add test!
+    # TODO is dit nodig?
+    if not any(col in columns for col in schema_table.column_names):
+        message = f"Columns [{columns}] are missing for data, but table insertions are expected to be complete."
         raise QueryInputError(message)
