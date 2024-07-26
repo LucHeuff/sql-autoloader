@@ -62,8 +62,6 @@ class DBConnector(ABC):
     connection: Connection
     credentials: str
     schema: Schema
-    insert_prefix: str
-    insert_postfix: str
 
     # ---- Context managers
 
@@ -95,20 +93,56 @@ class DBConnector(ABC):
         finally:
             cursor.close()
 
+    # ---- methods related to generating queries
+
+    # ---- methods related to generating queries
+
     @abstractmethod
-    def parameterize_value(self, value: str) -> str:
-        """Convert a value to a parameter using the syntax for this connector.
+    def get_insert_query(self, table: str) -> str:
+        """Get an insert query for this Connector.
 
         Args:
         ----
-            value: the name of the columns from the DataFrame to parameterize
+            table: to insert into
 
         Returns:
         -------
-            parameterized value
+            Valid insert query for this Connector
 
         """
         ...
+
+    @abstractmethod
+    def get_insert_query(self, table: str) -> str:
+        """Get an insert query for this Connector.
+
+        Args:
+        ----
+            table: to insert into
+
+        Returns:
+        -------
+            Valid insert query for this Connector
+
+        """
+        ...
+
+    @abstractmethod
+    def get_retrieve_query(self, table: str) -> str:
+        """Get a retrieve query for this Connector.
+
+        Args:
+        ----
+            table: to retrieve from
+
+        Returns:
+        -------
+            Valid retrieve query for this Connector
+
+        """
+        ...
+
+    # ---- methods related to the Schema
 
     @abstractmethod
     def get_schema(self) -> Schema:
@@ -149,7 +183,7 @@ class DBConnector(ABC):
             data = data.rename(columns)
 
         parse_input(table, list(data.columns), self.schema)
-        query = create_insert_query(
+        query = self.get_insert_query(table)
             table,
             list(data.columns),
             self.insert_prefix,
@@ -192,7 +226,7 @@ class DBConnector(ABC):
             data = data.rename(columns)
 
         parse_input(table, list(data.columns), self.schema)
-        query = create_retrieve_query(table, list(data.columns))
+        query = self.get_retrieve_query(table)
         # Executing query
         with self.cursor() as cursor:
             cursor.execute(query)
