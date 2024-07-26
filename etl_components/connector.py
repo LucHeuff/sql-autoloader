@@ -72,7 +72,7 @@ class DBConnector(ABC):
         self.connection = self.connector.connect(self.credentials)
         return self
 
-    def __exit__(self, *exception: tuple) -> None:
+    def __exit__(self, *exception: object) -> None:
         """Exit context manager by committing or rolling back on exception, and closing the connection.
 
         Args:
