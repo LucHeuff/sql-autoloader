@@ -2,14 +2,8 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from typing import Iterator, Protocol, Self
 
-import polars as pl
-
-from etl_components.dataframe_operations import merge_ids
+from etl_components.dataframe import get_dataframe
 from etl_components.parsers import parse_input
-from etl_components.query_generators import (
-    create_insert_query,
-    create_retrieve_query,
-)
 from etl_components.schema import Schema
 
 
