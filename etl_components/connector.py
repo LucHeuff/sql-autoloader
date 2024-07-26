@@ -161,9 +161,11 @@ class DBConnector(ABC):
         """Print the current database schema."""
         print(str(self.schema))  # noqa: T201
 
+    # ---- Database interaction methods
+
     def insert(
         self,
-        data: pl.DataFrame,
+        data,  # noqa: ANN001
         table: str,
         columns: dict[str, str] | None = None,
     ) -> None:
@@ -179,31 +181,30 @@ class DBConnector(ABC):
                      from data match column names in the database
 
         """
+        dataframe = get_dataframe(data)
         if columns is not None:
-            data = data.rename(columns)
+            dataframe.rename(columns)
 
-        parse_input(table, list(data.columns), self.schema)
+        parse_input(table, dataframe.columns, self.schema)
         query = self.get_insert_query(table)
-            table,
-            list(data.columns),
-            self.insert_prefix,
-            self.insert_postfix,
-            self.parameterize_value,
-        )
+        # TODO this assumes that I always insert the entire table.
+        # Is that a correct assumption?
         # Executing query
         with self.cursor() as cursor:
-            # TODO replace .to_dicts() with something more generic if I want to support pandas
-            cursor.executemany(query, data.to_dicts())
+            cursor.executemany(
+                query,
+                dataframe.rows(self.schema(table).column_names),
+            )
 
-    def retrieve_ids(
+    def retrieve_ids(  # noqa ANN201
         self,
-        data: pl.DataFrame,
+        data,  # noqa: ANN001
         table: str,
         columns: dict[str, str] | None = None,
         *,
         replace: bool = True,
         allow_duplication: bool = False,
-    ) -> pl.DataFrame:
+    ):
         """Retrieve ids from the database and join them to data.
 
         Args:
@@ -222,39 +223,40 @@ class DBConnector(ABC):
             data with ids from database added, or replacing original columns
 
         """
+        dataframe = get_dataframe(data)
         if columns is not None:
-            data = data.rename(columns)
+            dataframe.rename(columns)
 
-        parse_input(table, list(data.columns), self.schema)
+        parse_input(table, dataframe.columns, self.schema)
         query = self.get_retrieve_query(table)
         # Executing query
         with self.cursor() as cursor:
             cursor.execute(query)
             db_fetch = cursor.fetchall()
 
-        data = merge_ids(data, db_fetch, allow_duplication=allow_duplication)
+        dataframe.merge_ids(db_fetch, allow_duplication=allow_duplication)
 
         if replace:
             # Use table schema to determine which non_id columns can be dropped.
             schema_columns = self.schema(table).column_names
             non_id_columns = [col for col in schema_columns if "_id" not in col]
-            data = data.drop(non_id_columns, strict=False)  # type: ignore
+            dataframe.drop(non_id_columns)
         elif not replace and columns is not None:
             # making sure to reverse the naming of columns if they are not replaced
             reverse_columns = {v: k for (k, v) in columns.items()}
-            data = data.rename(reverse_columns)
+            dataframe.rename(reverse_columns)
 
-        return data
+        return dataframe
 
-    def insert_and_retrieve_ids(
+    def insert_and_retrieve_ids(  # noqa ANN201
         self,
-        data: pl.DataFrame,
+        data,  # noqa: ANN001
         table: str,
         columns: dict[str, str],
         *,
         replace: bool = True,
         allow_duplication: bool = False,
-    ) -> pl.DataFrame:
+    ):
         """Insert data into database and retrieve ids to join them to data.
 
             data: DataFrame containing the data for which ids need to be retrieved and joined
