@@ -20,7 +20,7 @@ def parse_input(
     Args:
     ----
         table: name of table to be inserted into
-        columns: dict of format {column: value, ...}
+        columns: list of columns in dataframe
         schema: database schema
 
     Raises:
@@ -36,5 +36,6 @@ def parse_input(
     schema_table = schema(table)
 
     if not any(col in schema_table.column_names for col in columns):
-        message = f"None of {columns} exist in {table}. Table schema is:\n{str(schema_table)}"
+        message = f"None of [{columns}] exist in {table}. Table schema is:\n{schema_table}"
+        raise QueryInputError(message)
         raise QueryInputError(message)
