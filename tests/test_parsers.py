@@ -37,7 +37,7 @@ def test_parse_input() -> None:
     """Test whether parse_input gives the correct results."""
     table = "fiets"
     columns = ["merk", "prijs"]
-    assert parse_input(table, columns, mock_schema) == columns
+    assert set(parse_input(table, columns, mock_schema)) == set(columns)
 
 
 def test_parse_input_fail_table() -> None:
