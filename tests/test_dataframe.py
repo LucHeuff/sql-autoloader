@@ -3,7 +3,7 @@ import polars as pl
 import pytest
 
 from etl_components.dataframe import UnknownDataframeTypeError, get_dataframe
-from etl_components.pandas_dataframe import PandasDataframe
+from etl_components.pandas_dataframe import PandasDataFrame
 from etl_components.polars_dataframe import PolarsDataFrame
 
 
@@ -15,7 +15,7 @@ def test_get_polars_dataframe() -> None:
 
 def test_get_pandas_dataframe() -> None:
     """Test whether get_dataframe correctly returns PandasDataFrame."""
-    pandas_df = pl.DataFrame()
+    pandas_df = pd.DataFrame()
     assert isinstance(get_dataframe(pandas_df), PandasDataFrame)
 
 
