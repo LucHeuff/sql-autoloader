@@ -68,7 +68,9 @@ class PolarsDataFrame:
 
         """
         orig_len = len(self.df)
-        db_data = pl.DataFrame(db_fetch)
+        # determining data types in self.df to make sure I don't get errors with dtypes
+        schema = dict(zip(self.df.columns, self.df.dtypes))
+        db_data = pl.DataFrame(db_fetch).cast(schema)  # type: ignore
 
         # taking the columns the two datasets have in common as join columns
         on_columns = list(set(self.columns) & set(db_data.columns))
