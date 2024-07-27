@@ -37,7 +37,7 @@ def test_parse_input() -> None:
     """Test whether parse_input gives the correct results."""
     table = "fiets"
     columns = ["merk", "prijs"]
-    assert parse_input(table, columns, mock_schema) is None
+    assert parse_input(table, columns, mock_schema) == columns
 
 
 def test_parse_input_fail_table() -> None:
@@ -112,7 +112,8 @@ def samples(draw: DrawFn, items: list, size: int | None = None) -> list:
 
     """
     if size is not None and size > len(items):
-        raise ValueError("Cannot have more samples than items.")
+        message = "Cannot have more samples than items."
+        raise ValueError(message)
 
     min_size = len(items) // 2 if size is None else size
     max_size = len(items) if size is None else size
@@ -134,6 +135,7 @@ class InsertQueryComponents:
     table: str
     columns: list[str]
     schema: Schema
+    common_columns: list[str]
     fail_table: bool
     fail_columns: bool
 
@@ -185,6 +187,8 @@ def parse_insert_strategy(
     )
     columns = draw(samples(columns_from))
 
+    common_columns = list(set(columns) & set(schema(table).column_names))
+
     # setting the sixth table name when fail_table
     if fail_table:
         table = table_candidates[5]
@@ -193,6 +197,7 @@ def parse_insert_strategy(
         table,
         columns,
         schema,
+        common_columns,
         fail_table,
         fail_columns,
     )
@@ -215,5 +220,5 @@ def test_parse_insert(components: InsertQueryComponents) -> None:
         # testing regular case
         assert (
             parse_input(components.table, components.columns, components.schema)
-            is None
+            == components.common_columns
         )

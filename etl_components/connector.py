@@ -96,12 +96,13 @@ class DBConnector(ABC):
     # ---- methods related to generating queries
 
     @abstractmethod
-    def get_insert_query(self, table: str) -> str:
+    def get_insert_query(self, table: str, columns: list[str]) -> str:
         """Get an insert query for this Connector.
 
         Args:
         ----
             table: to insert into
+            columns: to insert values into
 
         Returns:
         -------
@@ -111,12 +112,13 @@ class DBConnector(ABC):
         ...
 
     @abstractmethod
-    def get_retrieve_query(self, table: str) -> str:
+    def get_retrieve_query(self, table: str, columns: list[str]) -> str:
         """Get a retrieve query for this Connector.
 
         Args:
         ----
             table: to retrieve from
+            columns: to read values from
 
         Returns:
         -------
@@ -168,10 +170,8 @@ class DBConnector(ABC):
         if columns is not None:
             dataframe.rename(columns)
 
-        parse_input(table, dataframe.columns, self.schema)
-        query = self.get_insert_query(table)
-        # TODO this assumes that I always insert the entire table.
-        # Is that a correct assumption?
+        common_columns = parse_input(table, dataframe.columns, self.schema)
+        query = self.get_insert_query(table, common_columns)
         # Executing query
         with self.cursor() as cursor:
             cursor.executemany(
@@ -210,8 +210,8 @@ class DBConnector(ABC):
         if columns is not None:
             dataframe.rename(columns)
 
-        parse_input(table, dataframe.columns, self.schema)
-        query = self.get_retrieve_query(table)
+        common_columns = parse_input(table, dataframe.columns, self.schema)
+        query = self.get_retrieve_query(table, common_columns)
         # Executing query
         with self.cursor() as cursor:
             cursor.execute(query)

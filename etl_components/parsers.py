@@ -9,8 +9,8 @@ def parse_input(
     table: str,
     columns: list[str],
     schema: Schema,
-) -> None:
-    """Parse input values for insert query.
+) -> list[str]:
+    """Parse input values for insert or retrieve query, and return columns that table and data have in common.
 
     Checks whether table exists in the database,
     and whether any of columns exist for that table.
@@ -26,6 +26,10 @@ def parse_input(
         QueryInputError: when table does not exist in database
                           when no columns exist for that table
 
+    Returns:
+    -------
+        list of columns that table and data have in common.
+
     """
     if table not in schema.table_names:
         message = f"'{table}' does not exists in database schema."
@@ -37,8 +41,5 @@ def parse_input(
         message = f"None of [{columns}] exist in {table}. Table schema is:\n{schema_table}"
         raise QueryInputError(message)
 
-    # TODO add test!
-    # TODO is dit nodig?
-    if not any(col in columns for col in schema_table.column_names):
-        message = f"Columns [{columns}] are missing for data, but table insertions are expected to be complete."
-        raise QueryInputError(message)
+    common = set(columns) & set(schema_table.column_names)
+    return list(common)
