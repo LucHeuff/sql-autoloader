@@ -79,7 +79,6 @@ def get_dataframe(df) -> DataFrame:  # noqa: ANN001
         case "<class 'polars.dataframe.frame.DataFrame'>":
             from etl_components.polars_dataframe import PolarsDataFrame
 
-            # TODO figure out why PolarsDataFrame apparently isn't recognised as a DataFrame
             return PolarsDataFrame(df)
         case "<class 'pandas.core.frame.DataFrame'>":
             from etl_components.pandas_dataframe import PandasDataFrame
