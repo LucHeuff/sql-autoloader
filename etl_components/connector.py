@@ -47,27 +47,24 @@ class Connection(Protocol):
         ...
 
 
-class Connector(Protocol):
-    """Facilitates a connection with a database."""
-
-    def connect(self, credentials: str) -> Connection:
-        """Connect to the database."""
-        ...
-
-
 class DBConnector(ABC):
     """Abstract base class for connector with a database."""
 
-    connector: Connector
-    connection: Connection
     credentials: str
     schema: Schema
+
+    # ---- function for connecting to the database
+
+    @abstractmethod
+    def connect(self) -> Connection:
+        """Make a connection to the database."""
+        ...
 
     # ---- Context managers
 
     def __enter__(self) -> Self:
         """Enter context manager by creating a connection with the database."""
-        self.connection = self.connector.connect(self.credentials)
+        self.connection = self.connect()
         return self
 
     def __exit__(self, *exception: object) -> None:
