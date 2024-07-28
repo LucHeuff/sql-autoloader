@@ -35,7 +35,7 @@ def test_drop() -> None:
 def test_rows() -> None:
     """Test PolarsDataFrame.rows() correctly returns rows."""
     polars_df = PolarsDataFrame(pl.DataFrame({"a": [1], "b": [1], "c": [1]}))
-    assert polars_df.rows(["a", "b", "c"]) == [{"a": 1, "b": 1, "c": 1}]
+    assert polars_df.rows() == [{"a": 1, "b": 1, "c": 1}]
     # testing if it also works when subselecting some data
     assert polars_df.rows(["a", "c"]) == [{"a": 1, "c": 1}]
 

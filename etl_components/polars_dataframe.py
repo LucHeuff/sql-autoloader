@@ -32,14 +32,16 @@ class PolarsDataFrame:
         """
         self.df = self.df.drop(columns)
 
-    def rows(self, columns: list[str]) -> list[dict]:
+    def rows(self, columns: list[str] | None = None) -> list[dict]:
         """Return unique rows from the data, for the selected columns.
 
         Args:
         ----
-            columns: list of columns to restrict the data to.
+            columns: (Optional) list of columns to restrict the data to.
+                     if None, return all columns.
 
         """
+        columns = self.columns if columns is None else columns
         return self.df.select(columns).drop_nulls().unique().to_dicts()
 
     def merge_ids(

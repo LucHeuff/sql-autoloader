@@ -26,12 +26,13 @@ class DataFrame(Protocol):
 
         """
 
-    def rows(self, columns: list[str]) -> list[dict]:
+    def rows(self, columns: list[str] | None = None) -> list[dict]:
         """Return unique rows from the data, for the selected columns.
 
         Args:
         ----
-            columns: list of columns to restrict the data to.
+            columns: (Optional) list of columns to restrict the data to.
+                     if None, return all columns.
 
         """
         ...

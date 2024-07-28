@@ -35,7 +35,7 @@ def test_drop() -> None:
 def test_rows() -> None:
     """Test PandasDataFrame.rows() correctly returns rows."""
     pandas_df = PandasDataFrame(pd.DataFrame({"a": [1], "b": [1], "c": [1]}))
-    assert pandas_df.rows(["a", "b", "c"]) == [{"a": 1, "b": 1, "c": 1}]
+    assert pandas_df.rows() == [{"a": 1, "b": 1, "c": 1}]
     # testing if it also works when subselecting some data
     assert pandas_df.rows(["a", "c"]) == [{"a": 1, "c": 1}]
 
