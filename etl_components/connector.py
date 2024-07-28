@@ -128,7 +128,7 @@ class DBConnector(ABC):
 
     @abstractmethod
     def get_schema(self) -> Schema:
-        """Retrieve schema (tables and their columns) from the database."""
+        """Retrieve schema from the database."""
         ...
 
     def update_schema(self) -> None:
@@ -263,5 +263,36 @@ class DBConnector(ABC):
             allow_duplication=allow_duplication,
         )
 
-    # def compare(self, columns: list[tuple], data, *, exact: bool = True):
-    #     pass
+    def compare(self, data, query: str, *, exact: bool = False) -> None:  # noqa: ANN001
+        """Compare data in the database against data in a dataframe.
+
+        Args:
+        ----
+            data: DataFrame containing data to be compared to
+            query: valid SQL query to retrieve data to compare to
+            exact: (Optional) whether all the rows in data must match all
+                   the rows retrieved from the database. If False, only checks
+                   if rows from data appear in rows from query.
+
+        """
+        dataframe = get_dataframe(data)
+        data_rows = dataframe.rows()
+
+        with self.cursor() as cursor:
+            cursor.execute(query)
+            db_rows = cursor.fetchall()
+
+        # TODO data_rows and db_rows should both be lists of dicts.
+        # comparing now checks whether each row in on of the lists appears in
+        # another of the lists.
+        # This means that I can't debug where things go missings though,
+        # so I may want to write more complicated error messages here instead
+        # of simple asserts.
+
+        assert all(
+            row in db_rows for row in data_rows
+        ), "Some rows in data do not appear in database."
+        if exact:
+            assert all(
+                row in data_rows for row in db_rows
+            ), "Not all rows in data appear in database."
