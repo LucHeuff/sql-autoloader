@@ -173,7 +173,7 @@ class DBConnector(ABC):
         with self.cursor() as cursor:
             cursor.executemany(
                 query,
-                dataframe.rows(self.schema(table).column_names),
+                dataframe.rows(common_columns),
             )
 
     def retrieve_ids(  # noqa ANN201
@@ -218,7 +218,7 @@ class DBConnector(ABC):
 
         if replace:
             # Use table schema to determine which non_id columns can be dropped.
-            schema_columns = self.schema(table).column_names
+            schema_columns = self.schema(table).columns
             non_id_columns = [col for col in schema_columns if "_id" not in col]
             dataframe.drop(non_id_columns)
         elif not replace and columns is not None:

@@ -2,22 +2,12 @@ from dataclasses import dataclass
 
 
 @dataclass
-class Column:
-    """Describes a column with a name and a data type."""
+class Reference:
+    """Describes a reference to another table."""
 
-    name: str
-    data_type: str
-
-    def __str__(self) -> str:
-        """Readable representation of the column.
-
-        Returns
-        -------
-            string representation of column.
-
-
-        """
-        return f"  {self.name}: {self.data_type}"
+    column: str
+    to_table: str
+    to_column: str
 
 
 @dataclass
@@ -25,51 +15,26 @@ class Table:
     """Describes a table with a name and a list of columns."""
 
     name: str
-    columns: list[Column]
+    sql: str
+    columns: list[str]
+    references: list[Reference]
+    referred_by: list[str] | None = None
 
     @property
-    def column_names(self) -> list[str]:
-        """Get a list of names of columns in the table.
+    def refers_to(self) -> list[str]:
+        """Get a list of tables that this table refers to."""
+        return [reference.to_table for reference in self.references]
 
-        Returns
-        -------
-            list of column names
-
-
-        """
-        return [column.name for column in self.columns]
-
-    def __call__(self, column_name: str) -> Column:
-        """Retrieve the column that belongs to the provided column_name.
-
-        Args:
-        ----
-            column_name: of the desired column
-
-        Returns:
-        -------
-           Column with the provided column_name
-
-        Raises:
-        ------
-            ValueError: if the provided column_name does appear in the table
-
-        """
-        if column_name not in self.column_names:
-            message = f"'{column_name}' doe snot appear in table."
+    def get_reference(self, table: str) -> Reference:
+        """Get the reference of self to table."""
+        if not table in self.refers_to:
+            message = f"{self.name} does not refer to {table}"
             raise ValueError(message)
-        return self.columns[self.column_names.index(column_name)]
+        return self.references[self.refers_to.index(table)]
 
     def __str__(self) -> str:
-        """Readable representation of the table.
-
-        Returns
-        -------
-            string representation of table
-
-        """
-        columns = "\n".join(list(map(str, self.columns)))
-        return f"TABLE {self.name} {{\n{columns}\n}}"
+        """Human readable representation of the table."""
+        return self.sql
 
 
 @dataclass
@@ -112,12 +77,5 @@ class Schema:
         return self.tables[self.table_names.index(table_name)]
 
     def __str__(self) -> str:
-        """Readable representation of schema.
-
-        Returns
-        -------
-            string representation of schema
-
-
-        """
+        """Human readable representation of schema."""
         return "\n\n".join(list(map(str, self.tables)))
