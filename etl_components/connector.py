@@ -282,6 +282,14 @@ class DBConnector(ABC):
             cursor.execute(query)
             db_rows = cursor.fetchall()
 
+        # TODO These assertions check if the compare query ran well enough,
+        # this should not be necessary when automated.
+
+        assert len(db_rows) > 0, "Compare query yielded no results."
+        assert len(db_rows) >= len(
+            data_rows
+        ), "Compare query yielded fewer rows than data."
+
         # TODO data_rows and db_rows should both be lists of dicts.
         # comparing now checks whether each row in on of the lists appears in
         # another of the lists.
