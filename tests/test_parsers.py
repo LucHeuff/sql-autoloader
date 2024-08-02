@@ -7,28 +7,14 @@ from hypothesis import given
 from hypothesis.strategies import DrawFn, composite
 
 from etl_components.parsers import QueryInputError, parse_input
-from etl_components.schema import Column, Schema, Table
+from etl_components.schema import Schema, Table
 
 # ---- manual tests since hypothesis keeps taking forever to show results
 
 mock_schema = Schema(
     [
-        Table(
-            "fiets",
-            [
-                Column("merk", "VARCHAR"),
-                Column("prijs", "INT"),
-                Column("kleur", "ENUM"),
-            ],
-        ),
-        Table(
-            "auto",
-            [
-                Column("merk", "VARCHAR"),
-                Column("prijs", "INT"),
-                Column("brandstof", "CHAR"),
-            ],
-        ),
+        Table("fiets", "CREATE fiets", ["merk", "prijs", "kleur"], [], None),
+        Table("auto", "CREATE auto", ["merk", "prijs", "brandstof"], [], None),
     ]
 )
 
@@ -164,30 +150,24 @@ def parse_insert_strategy(
     column_candidates = draw(names_generator(12))
 
     # generating schema and correct table
-
     schema = Schema(
         [
-            Table(
-                table,
-                [
-                    Column(name, "EMPTY")
-                    for name in draw(samples(column_candidates[:6]))
-                ],
-            )
+            Table(table, "", draw(samples(column_candidates[:6])), [])
             for table in table_candidates[:5]
         ]
     )
+
     # drawing table from the first 5 table candidates
     table = draw(st.sampled_from(table_candidates[:5]))
 
     # sampling column names
     # deliberately sampling from excluded set of column candidates when fail_columns
     columns_from = (
-        column_candidates[6:] if fail_columns else schema(table).column_names
+        column_candidates[6:] if fail_columns else schema(table).columns
     )
     columns = draw(samples(columns_from))
 
-    common_columns = list(set(columns) & set(schema(table).column_names))
+    common_columns = list(set(columns) & set(schema(table).columns))
 
     # setting the sixth table name when fail_table
     if fail_table:
