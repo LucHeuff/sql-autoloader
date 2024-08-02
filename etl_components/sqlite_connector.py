@@ -114,8 +114,6 @@ class SQLiteConnector(DBConnector):
 
     def connect(self) -> sqlite3.Connection:
         """Make a connection to the SQLite database."""
-        # TODO these options should cause datetime things to show up properly,
-        # if they are written into the database from sqlite3 as well. But I haven't tested that yet 😇
         connection = sqlite3.connect(
             self.credentials,
             detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
