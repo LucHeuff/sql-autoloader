@@ -65,6 +65,7 @@ class DBConnector(ABC):
     def __enter__(self) -> Self:
         """Enter context manager by creating a connection with the database."""
         self.connection = self.connect()
+        self.schema = self.get_schema()
         return self
 
     def __exit__(self, *exception: object) -> None:
@@ -232,7 +233,7 @@ class DBConnector(ABC):
         self,
         data,  # noqa: ANN001
         table: str,
-        columns: dict[str, str],
+        columns: dict[str, str] | None = None,
         *,
         replace: bool = True,
         allow_duplication: bool = False,
