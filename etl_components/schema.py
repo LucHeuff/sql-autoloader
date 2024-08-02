@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 
 
+class SchemaError(Exception):
+    """Raised when something goes wrong when using the schema."""
+
+
 @dataclass
 class Reference:
     """Describes a reference to another table."""
@@ -29,7 +33,7 @@ class Table:
         """Get the reference of self to table."""
         if not table in self.refers_to:
             message = f"{self.name} does not refer to {table}"
-            raise ValueError(message)
+            raise SchemaError(message)
         return self.references[self.refers_to.index(table)]
 
     def __str__(self) -> str:
@@ -68,12 +72,12 @@ class Schema:
 
         Raises:
         ------
-            ValueError: if table_name does not appear in schema.
+            SchemaError: if table_name does not appear in schema.
 
         """
         if table_name not in self.table_names:
             message = f"'{table_name}' does not appear in schema."
-            raise ValueError(message)
+            raise SchemaError(message)
         return self.tables[self.table_names.index(table_name)]
 
     def __str__(self) -> str:
