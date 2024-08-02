@@ -42,16 +42,27 @@ def test_rows() -> None:
 
 def test_merge_ids() -> None:
     """Test PandasDataFrame.merge_ids() correctly merges ids."""
-    pandas_df = PandasDataFrame(pd.DataFrame({"a": ["A", "B", "C"]}))
+    pandas_df = PandasDataFrame(
+        pd.DataFrame({"a": ["A", "B", "C"], "b": [1 / 3, 2 / 3, 3 / 3]})
+    )
     db_fetch = [
         {"a_id": 1, "a": "A"},
         {"a_id": 2, "a": "B"},
         {"a_id": 3, "a": "C"},
     ]
+    out_df = (
+        pd.DataFrame(
+            {
+                "a": ["A", "B", "C"],
+                "a_id": [1, 2, 3],
+                "b": [1 / 3, 2 / 3, 3 / 3],
+            }
+        ),
+    )
     merge = pandas_df.merge_ids(db_fetch)
     assert_frame_equal(
         merge,
-        pd.DataFrame(db_fetch),
+        out_df,
         check_like=True,
     )
 

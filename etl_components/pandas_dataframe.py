@@ -71,7 +71,7 @@ class PandasDataFrame:
         """
         orig_len = len(self.df)
         # determining data types in self.df to make sure I don't get errors with dtypes
-        schema = self.df.dtypes.to_dict()
+        schema = self.df.dtypes.filter(items=db_fetch[0].keys()).to_dict()
         # attempting to replace None since pandas allows multiple values for that
         db_data = (
             pd.DataFrame(db_fetch)
