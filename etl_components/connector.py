@@ -226,7 +226,7 @@ class DBConnector(ABC):
             reverse_columns = {v: k for (k, v) in columns.items()}
             dataframe.rename(reverse_columns)
 
-        return dataframe
+        return dataframe.data
 
     def insert_and_retrieve_ids(  # noqa ANN201
         self,

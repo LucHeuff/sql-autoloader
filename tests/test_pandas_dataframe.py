@@ -50,18 +50,16 @@ def test_merge_ids() -> None:
         {"a_id": 2, "a": "B"},
         {"a_id": 3, "a": "C"},
     ]
-    out_df = (
-        pd.DataFrame(
-            {
-                "a": ["A", "B", "C"],
-                "a_id": [1, 2, 3],
-                "b": [1 / 3, 2 / 3, 3 / 3],
-            }
-        ),
+    out_df = pd.DataFrame(
+        {
+            "a": ["A", "B", "C"],
+            "a_id": [1, 2, 3],
+            "b": [1 / 3, 2 / 3, 3 / 3],
+        }
     )
-    merge = pandas_df.merge_ids(db_fetch)
+    pandas_df.merge_ids(db_fetch)
     assert_frame_equal(
-        merge,
+        pandas_df.data,
         out_df,
         check_like=True,
     )
@@ -69,17 +67,27 @@ def test_merge_ids() -> None:
 
 def test_merge_ids_allow_dupdicate() -> None:
     """Test PandasDataFrame.merge_ids() correctly merges ids."""
-    pandas_df = PandasDataFrame(pd.DataFrame({"a": ["A", "B", "C"]}))
+    pandas_df = PandasDataFrame(
+        pd.DataFrame({"a": ["A", "B", "C"], "c": [1 / 3, 2 / 3, 3 / 3]})
+    )
     db_fetch = [
         {"a_id": 1, "a": "A", "b": 1},
         {"a_id": 2, "a": "B", "b": 1},
         {"a_id": 3, "a": "C", "b": 1},
         {"a_id": 3, "a": "C", "b": 2},
     ]
-    merge = pandas_df.merge_ids(db_fetch, allow_duplication=True)
+    out_df = pd.DataFrame(
+        {
+            "a": ["A", "B", "C", "C"],
+            "a_id": [1, 2, 3, 3],
+            "b": [1, 1, 1, 2],
+            "c": [1 / 3, 2 / 3, 3 / 3, 3 / 3],
+        }
+    )
+    pandas_df.merge_ids(db_fetch, allow_duplication=True)
     assert_frame_equal(
-        merge,
-        pd.DataFrame(db_fetch),
+        pandas_df.data,
+        out_df,
         check_like=True,
     )
 

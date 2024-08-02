@@ -10,7 +10,7 @@ class PandasDataFrame:
 
     def __init__(self, data: pd.DataFrame) -> None:
         """PandasDataframe constructor."""
-        self.df = data
+        self.df = data.copy()
 
     def rename(self, mapping: dict[str, str]) -> None:
         """Rename columns.
@@ -49,7 +49,7 @@ class PandasDataFrame:
         db_fetch: list[dict],
         *,
         allow_duplication: bool = False,
-    ) -> pd.DataFrame:
+    ) -> None:
         """Merge data with ids from database with data, using polars.
 
         Args:
@@ -82,22 +82,22 @@ class PandasDataFrame:
         # taking the columns the two datasets have in common as join columns
         on_columns = list(set(self.columns) & set(db_data.columns))
 
-        data = self.df.merge(db_data, on=on_columns, how="left")
+        self.df = self.df.merge(db_data, on=on_columns, how="left")
 
         # sanity check: dataset should not shrink (impossible?) and rows should not be duplicated
-        assert not len(data) < orig_len, "Rows were lost when joining on ids."
         assert (
-            not len(data) > orig_len or allow_duplication
+            not len(self.df) < orig_len
+        ), "Rows were lost when joining on ids."
+        assert (
+            not len(self.df) > orig_len or allow_duplication
         ), "Rows were duplicated when joining on ids."
 
         # checking if any of the id columns are now empty
-        missing_ids = data.filter(regex="_id$").isna()
+        missing_ids = self.df.filter(regex="_id$").isna()
         if bool(missing_ids.any(axis=None)):
-            rows_with_missings = data[missing_ids.any(axis=1)]
+            rows_with_missings = self.df[missing_ids.any(axis=1)]
             message = "Some id's were returned as NA:\n"
             raise MissingIDsError(message + str(rows_with_missings))
-
-        return data
 
     @property
     def columns(self) -> list[str]:

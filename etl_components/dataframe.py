@@ -39,7 +39,7 @@ class DataFrame(Protocol):
 
     def merge_ids(
         self, db_fetch: list[dict], *, allow_duplication: bool = False
-    ) -> Any:  # noqa: ANN401
+    ) -> None:
         """Merge data with ids from the database.
 
         Args:
