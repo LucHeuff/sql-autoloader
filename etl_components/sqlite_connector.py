@@ -1,7 +1,6 @@
 import sqlite3
 
 from etl_components.connector import Cursor, DBConnector
-from etl_components.schema import Reference, Schema, Table
 
 # ---- Functions for getting SQL queries for the sqlite3 connector
 
@@ -61,40 +60,35 @@ def _dict_row(cursor: sqlite3.Cursor, row: tuple) -> dict:
 # ---- functions for fetching schema information from the database
 
 
-def _get_schema(cursor: Cursor) -> Schema:
-    query = "SELECT * FROM sqlite_master WHERE type = 'table'"
+def _get_tables(cursor: Cursor) -> list[str]:
+    """Get list of tables from SQLite database."""
+    query = "SELECT tbl_name FROM sqlite_master WHERE type = 'table'"
     cursor.execute(query)
-    table_info = cursor.fetchall()
+    return [row["tbl_name"] for row in cursor.fetchall()]
 
-    tables = []
 
-    for info in table_info:
-        table = info["tbl_name"]
-        # Fetching column
-        query = f"SELECT name FROM pragma_table_info('{table}')"
-        cursor.execute(query)
-        column_info = cursor.fetchall()
-        columns = [col["name"] for col in column_info]
-        # fetching references
-        query = f"SELECT * FROM pragma_foreign_key_list('{table}')"
-        cursor.execute(query)
-        reference_info = cursor.fetchall()
-        references = [
-            Reference(ref["from"], ref["table"], ref["to"])
-            for ref in reference_info
-        ]
-        tables.append(Table(table, info["sql"], columns, references))
+def _get_table_schema(cursor: Cursor, table_name: str) -> str:
+    """Get SQL schema for this table from SQLite database."""
+    query = f"SELECT sql FROM sqlite_master WHERE tbl_name = '{table_name}'"
+    cursor.execute(query)
+    return cursor.fetchall()[0]["sql"]
 
-    # filling in referred_by
-    for table in tables:
-        referred_by = [
-            other_table.name
-            for other_table in tables
-            if table.name in other_table.refers_to
-        ]
-        table.referred_by = referred_by
 
-    return Schema(tables)
+def _get_columns(cursor: Cursor, table_name: str) -> list[str]:
+    """Get columns for this table from SQLite database."""
+    query = f"SELECT name FROM pragma_table_info('{table_name}')"
+    cursor.execute(query)
+    return [row["name"] for row in cursor.fetchall()]
+
+
+def _get_references(cursor: Cursor, table_name: str) -> list[dict[str, str]]:
+    """Get references for this table from SQLite database."""
+    query = f"SELECT * FROM pragma_foreign_key_list('{table_name}')"
+    cursor.execute(query)
+    return [
+        {"column": row["from"], "table": row["table"], "to": row["to"]}
+        for row in cursor.fetchall()
+    ]
 
 
 class SQLiteConnector(DBConnector):
@@ -153,7 +147,22 @@ class SQLiteConnector(DBConnector):
         """
         return _get_retrieve_query(table, columns)
 
-    def get_schema(self) -> Schema:
-        """Retrieve schema from the database."""
+    def get_tables(self) -> list[str]:
+        """Retrieve list of tables from the database."""
         with self.cursor() as cursor:
-            return _get_schema(cursor)
+            return _get_tables(cursor)
+
+    def get_table_schema(self, table_name: str) -> str:
+        """Retrieve SQL schema for this table from the database."""
+        with self.cursor() as cursor:
+            return _get_table_schema(cursor, table_name)
+
+    def get_columns(self, table_name: str) -> list[str]:
+        """Retrieve a list of columns for this table form the database."""
+        with self.cursor() as cursor:
+            return _get_columns(cursor, table_name)
+
+    def get_references(self, table_name: str) -> list[dict[str, str]]:
+        """Retrieve a list of references for this table from the database."""
+        with self.cursor() as cursor:
+            return _get_references(cursor, table_name)

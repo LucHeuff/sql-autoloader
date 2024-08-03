@@ -126,11 +126,39 @@ class DBConnector(ABC):
         ...
 
     # ---- methods related to the Schema
+    @abstractmethod
+    def get_tables(self) -> list[str]:
+        """Retrieve list of table names from the database."""
 
     @abstractmethod
+    def get_table_schema(self, table_name: str) -> str:
+        """Retrieve SQL schema for this table from the database."""
+
+    @abstractmethod
+    def get_columns(self, table_name: str) -> list[str]:
+        """Retrieve a list of columns for this table from the database."""
+
+    @abstractmethod
+    def get_references(self, table_name: str) -> list[dict[str, str]]:
+        """Retrieve a list of references for this table from the database.
+
+        Reference should be a dictionary of format
+        {
+            "column": <name of reference column in current table>,
+            "table: <table that is referred to>,
+            "to": <column that is referred to>
+        }
+
+        """
+
     def get_schema(self) -> Schema:
         """Retrieve schema from the database."""
-        ...
+        return Schema(
+            self.get_tables,
+            self.get_table_schema,
+            self.get_columns,
+            self.get_references,
+        )
 
     def update_schema(self) -> None:
         """Update schema from database manually.
