@@ -96,18 +96,11 @@ class Schema:
 
     @property
     def table_names(self) -> list[str]:
-        """Get a list of names of tables in the schema.
-
-        Returns
-        -------
-            list of table names
-
-
-        """
+        """Get a list of names of tables in the schema."""
         return [table.name for table in self.tables]
 
-    def get_table_by_column(self, column_name: str) -> Table:
-        """Retrieve the Table that contains this column name.
+    def get_table_by_column(self, column_name: str) -> str:
+        """Retrieve the name of the table that contains this column name.
 
         Args:
         ----
@@ -124,7 +117,7 @@ class Schema:
 
         Returns:
         -------
-            Appropriate table
+            Name of the table
 
 
         """
@@ -134,7 +127,7 @@ class Schema:
             if not column in self(table).columns:
                 message = f"On {column_name}: {column} does not appear in {table} schema:\n{self(table)}"
                 raise SchemaError(message)
-            return self(table)
+            return self(table).name
 
         if not column_name in self.column_table_mapping:
             message = f"No column by name of '{column_name}' appears anywhere in the schema."
@@ -147,10 +140,28 @@ class Schema:
             )
             message = f"{column_name} is ambiguous, appears in tables {tables}.\nPlease prefix the correct table, e.g. {options}"
             raise SchemaError(message)
-        return self(tables[0])
+        return self(tables[0]).name
+
+    def get_columns(self, table_name: str) -> list[str]:
+        """Get a list of column names for this table."""
+        return self(table_name).columns
+
+    def get_table_schema(self, table_name: str) -> str:
+        """Get the schema for this table."""
+        return str(self(table_name))
+
+    def get_table_refers_to(self, table_name: str) -> list[str]:
+        """Get a list of tables that this table refers to."""
+        return self(table_name).refers_to
+
+    def get_table_referred_by(self, table_name: str) -> list[str]:
+        """Get a list of tables that this table is referred by."""
+        return self(table_name).referred_by
 
     def __call__(self, table_name: str) -> Table:
         """Retrieve the Table that belongs to provided table_name.
+
+        Not intended for direct use.
 
         Args:
         ----

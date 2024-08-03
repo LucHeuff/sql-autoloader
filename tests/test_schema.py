@@ -62,21 +62,21 @@ def test_schema() -> None:
     assert schema.table_names == ["fiets", "fabriek"]
     for table in get_tables():
         assert schema(table).name == table
-        assert schema(table).sql == get_table_schema(table)
-        assert schema(table).columns == get_columns(table)
+        assert schema.get_table_schema(table) == get_table_schema(table)
+        assert schema.get_columns(table) == get_columns(table)
         assert schema(table).references == [
             Reference(**ref) for ref in get_references(table)
         ]
-        assert schema(table).refers_to == get_refers_to(table)
-        assert schema(table).referred_by == get_referred_by(table)
+        assert schema.get_table_refers_to(table) == get_refers_to(table)
+        assert schema.get_table_referred_by(table) == get_referred_by(table)
     assert str(schema) == "CREATE fiets\n\nCREATE fabriek"
     # Schema should raise an error when the table does not exist
     with pytest.raises(SchemaError):
         schema("doos")
 
     # ---- Testing retrieving tables through columns
-    assert schema.get_table_by_column("fabriek_id") == schema("fiets")
-    assert schema.get_table_by_column("fiets.fabriek_id") == schema("fiets")
+    assert schema.get_table_by_column("fabriek_id") == "fiets"
+    assert schema.get_table_by_column("fiets.fabriek_id") == "fiets"
     # schema should raise an error when the column doesn't exist
     with pytest.raises(SchemaError):
         schema.get_table_by_column("doos")

@@ -35,11 +35,9 @@ def parse_input(
         message = f"'{table}' does not exists in database schema."
         raise QueryInputError(message)
 
-    schema_table = schema(table)
-
-    if not any(col in schema_table.columns for col in columns):
-        message = f"None of [{columns}] exist in {table}. Table schema is:\n{schema_table}"
+    if not any(col in schema.get_columns(table) for col in columns):
+        message = f"None of [{columns}] exist in {table}. Table schema is:\n{schema.get_table_schema(table)}"
         raise QueryInputError(message)
 
-    common = set(columns) & set(schema_table.columns)
+    common = set(columns) & set(schema.get_columns(table))
     return list(common)
