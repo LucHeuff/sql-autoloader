@@ -292,19 +292,30 @@ class DBConnector(ABC):
             allow_duplication=allow_duplication,
         )
 
-    def compare(self, data, query: str, *, exact: bool = False) -> None:  # noqa: ANN001
+    def compare(
+        self,
+        data,  # noqa: ANN001
+        query: str,
+        columns: dict[str, str] | None = None,
+        *,
+        exact: bool = False,
+    ) -> None:
         """Compare data in the database against data in a dataframe.
 
         Args:
         ----
             data: DataFrame containing data to be compared to
             query: valid SQL query to retrieve data to compare to
+            columns: (Optional) dictionary linking column names in data with column names in dataframe
+                     Example {data_name: db_name, ...}
             exact: (Optional) whether all the rows in data must match all
                    the rows retrieved from the database. If False, only checks
                    if rows from data appear in rows from query.
 
         """
         dataframe = get_dataframe(data)
+        if columns is not None:
+            dataframe.rename(columns)
         data_rows = dataframe.rows()
 
         with self.cursor() as cursor:

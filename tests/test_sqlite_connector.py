@@ -53,7 +53,7 @@ def test_integration() -> None:
     data = pl.DataFrame(
         {
             "vehicle": ["Car", "Bike", "Bike ", "Train"],
-            "production_date": [
+            "date": [
                 "2000-01-01",
                 "2000-02-02",
                 "2000-03-03",
@@ -61,7 +61,7 @@ def test_integration() -> None:
             ],
             "colour": ["Red", "Green", "Black", "Yellow"],
         },
-        schema_overrides={"production_date": pl.Date},
+        schema_overrides={"date": pl.Date},
     )
 
     with SQLiteConnector(":memory:") as sqlite:
@@ -74,6 +74,13 @@ def test_integration() -> None:
         orig_data = data.clone()
 
         data = sqlite.insert_and_retrieve_ids(data, "colour")
-        data = sqlite.insert_and_retrieve_ids(data, "vehicle", replace=False)
+        data = sqlite.insert_and_retrieve_ids(
+            data, "vehicle", columns={"date": "production_date"}, replace=False
+        )
         sqlite.insert(data, "vehicle_colour")
-        sqlite.compare(orig_data, compare_query, exact=True)
+        sqlite.compare(
+            orig_data,
+            compare_query,
+            columns={"date": "production_date"},
+            exact=True,
+        )
