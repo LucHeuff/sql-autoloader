@@ -15,7 +15,10 @@ def test_table() -> None:
     table = Table(name, sql, columns, references, refers_to, referred_by)
 
     assert table.refers_to == ["fabriek"]
-    assert table.get_reference("fabriek") == references[0]
+    assert (
+        table.get_reference("fabriek")
+        == "JOIN fabriek ON fiets.fabriek_id = fabriek.id"
+    )
     assert str(table) == sql
     with pytest.raises(SchemaError):
         table.get_reference("doos")
@@ -55,6 +58,7 @@ def test_schema() -> None:
 
     schema = Schema(get_tables, get_table_schema, get_columns, get_references)
 
+    # ---- Testing basic properties of Schema
     assert schema.table_names == ["fiets", "fabriek"]
     for table in get_tables():
         assert schema(table).name == table
@@ -66,5 +70,19 @@ def test_schema() -> None:
         assert schema(table).refers_to == get_refers_to(table)
         assert schema(table).referred_by == get_referred_by(table)
     assert str(schema) == "CREATE fiets\n\nCREATE fabriek"
+    # Schema should raise an error when the table does not exist
     with pytest.raises(SchemaError):
         schema("doos")
+
+    # ---- Testing retrieving tables through columns
+    assert schema.get_table_by_column("fabriek_id") == schema("fiets")
+    assert schema.get_table_by_column("fiets.fabriek_id") == schema("fiets")
+    # schema should raise an error when the column doesn't exist
+    with pytest.raises(SchemaError):
+        schema.get_table_by_column("doos")
+    # schema should raise an error when the column name appears in multiple tables
+    with pytest.raises(SchemaError):
+        schema.get_table_by_column("name")
+    # schema should raise an error when column doesn't exist for prefixed table
+    with pytest.raises(SchemaError):
+        schema.get_table_by_column("fiets.doos")
