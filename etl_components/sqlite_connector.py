@@ -1,4 +1,6 @@
 import sqlite3
+from contextlib import contextmanager
+from typing import Iterator
 
 from etl_components.connector import Cursor, DBConnector
 
@@ -94,7 +96,7 @@ def _get_references(cursor: Cursor, table_name: str) -> list[dict[str, str]]:
 class SQLiteConnector(DBConnector):
     """Connector for SQLite databases."""
 
-    connector = sqlite3  # type: ignore
+    connection: sqlite3.Connection
 
     def __init__(self, credentials: str) -> None:
         """Create a SQLiteConnector that connects to the database at the given credentials.
@@ -114,6 +116,16 @@ class SQLiteConnector(DBConnector):
         )
         connection.row_factory = _dict_row
         return connection
+
+    # Shadowing the context manager for cursor to get the correct cursor type for LSP
+    @contextmanager
+    def cursor(self) -> Iterator[sqlite3.Cursor]:
+        """Context manager for sqlite3.cursor."""
+        cursor = self.connection.cursor()
+        try:
+            yield cursor
+        finally:
+            cursor.close()
 
     # ---- query generation methods
 
