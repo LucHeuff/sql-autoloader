@@ -2,6 +2,7 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
+from etl_components.dataframe import get_dataframe
 from etl_components.polars_dataframe import PolarsDataFrame
 
 
@@ -101,3 +102,9 @@ def test_merge_ids_duplicate_assertion() -> None:
     ]
     with pytest.raises(AssertionError):
         polars_df.merge_ids(db_fetch)
+
+
+def test_pass_dataframe() -> None:
+    """Test if get_dataframe returns the PolarsDataFrame when given a PolarsDataFrame."""
+    polars_df = PolarsDataFrame(pl.DataFrame())
+    assert get_dataframe(polars_df) == polars_df

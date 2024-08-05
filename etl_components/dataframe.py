@@ -1,10 +1,11 @@
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 
 class UnknownDataframeTypeError(Exception):
     """Raised when an unknown dataframe type is passed to get_dataframe()."""
 
 
+@runtime_checkable
 class DataFrame(Protocol):
     """Wrapper class for dataframe-like objects."""
 
@@ -76,6 +77,9 @@ def get_dataframe(df) -> DataFrame:  # noqa: ANN001
         DataFrame wrapper containing df
 
     """
+    if isinstance(df, DataFrame):
+        return df
+
     match str(type(df)):
         case "<class 'polars.dataframe.frame.DataFrame'>":
             from etl_components.polars_dataframe import PolarsDataFrame

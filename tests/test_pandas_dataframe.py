@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
+from etl_components.dataframe import get_dataframe
 from etl_components.pandas_dataframe import PandasDataFrame
 
 
@@ -103,3 +104,9 @@ def test_merge_ids_dupdicate_assertion() -> None:
     ]
     with pytest.raises(AssertionError):
         pandas_df.merge_ids(db_fetch)
+
+
+def test_pass_dataframe() -> None:
+    """Test if get_dataframe returns the PandasDataFrame when given a PandasDataFrame."""
+    polars_df = PandasDataFrame(pd.DataFrame())
+    assert get_dataframe(polars_df) == polars_df
