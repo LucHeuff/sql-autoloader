@@ -86,3 +86,13 @@ def test_schema() -> None:
     # schema should raise an error when column doesn't exist for prefixed table
     with pytest.raises(SchemaError):
         schema.get_table_by_column("fiets.doos")
+
+    # ---- testing input parsing
+    assert set(schema.parse_input("fiets", ["name", "fabriek_id"])) == {
+        "name",
+        "fabriek_id",
+    }
+    assert set(schema.parse_input("fiets", ["name"])) == {"name"}
+    # parse_input should raise an error when none of the columns exist for the table
+    with pytest.raises(SchemaError):
+        schema.parse_input("fiets", ["doos", "truck"])

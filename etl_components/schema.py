@@ -158,6 +158,35 @@ class Schema:
         """Get a list of tables that this table is referred by."""
         return self(table_name).referred_by
 
+    def parse_input(self, table_name: str, columns: list[str]) -> list[str]:
+        """Parse input values for insert or retrieve query, and return columns that table and data have in common.
+
+        Checks whether table exists in the database,
+        and whether any of columns exist for that table.
+
+        Args:
+        ----
+            table_name: name of table to be inserted into
+            columns: list of columns in dataframe
+
+        Raises:
+        ------
+            SchemaError: when no columns exist for that table
+
+        Returns:
+        -------
+            list of columns that table and data have in common.
+
+        """
+        table = self(table_name)
+
+        if not any(col in table.columns for col in columns):
+            message = f"None of [{columns}] exist in {table_name}. Table scheme is:\n{table}"
+            raise SchemaError(message)
+
+        common = set(columns) & set(table.columns)
+        return list(common)
+
     def __call__(self, table_name: str) -> Table:
         """Retrieve the Table that belongs to provided table_name.
 

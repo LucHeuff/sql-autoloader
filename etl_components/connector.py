@@ -3,7 +3,6 @@ from contextlib import contextmanager
 from typing import Iterator, Protocol, Self
 
 from etl_components.dataframe import get_dataframe
-from etl_components.parsers import parse_input
 from etl_components.schema import Schema
 
 
@@ -196,7 +195,7 @@ class DBConnector(ABC):
         if columns is not None:
             dataframe.rename(columns)
 
-        common_columns = parse_input(table, dataframe.columns, self.schema)
+        common_columns = self.schema.parse_input(table, dataframe.columns)
         query = self.get_insert_query(table, common_columns)
         # Executing query
         with self.cursor() as cursor:
@@ -236,7 +235,7 @@ class DBConnector(ABC):
         if columns is not None:
             dataframe.rename(columns)
 
-        common_columns = parse_input(table, dataframe.columns, self.schema)
+        common_columns = self.schema.parse_input(table, dataframe.columns)
         query = self.get_retrieve_query(table, common_columns)
         # Executing query
         with self.cursor() as cursor:
