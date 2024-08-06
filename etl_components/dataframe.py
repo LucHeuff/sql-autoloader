@@ -50,7 +50,7 @@ class DataFrame(Protocol):
 
         Raises:
         ------
-            MissingIDsError: if as a rsult of merging any id columns now contain missings.
+            MissingIDsError: if as a result of merging any id columns now contain missings.
 
         """
 
@@ -89,6 +89,7 @@ def get_dataframe(df) -> DataFrame:  # noqa: ANN001
             from etl_components.pandas_dataframe import PandasDataFrame
 
             return PandasDataFrame(df)
+
         case _:
             message = (
                 "Expecting pandas or polars dataframe, but got {type(df)}."
