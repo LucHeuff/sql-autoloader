@@ -11,7 +11,6 @@ GetTableSchema = Callable[[str], str]
 GetColumnsFunction = Callable[[str], list[str]]
 GetReferencesFunction = Callable[[str], list[dict[str, str]]]
 
-# TODO check for all these classes, and methods in Schema, whether I need all of them.
 
 # TODO add docstrings to public functions
 
@@ -209,7 +208,17 @@ class Schema:
     # ---- Public methods
 
     def get_columns(self, table_name: str) -> list[str]:
-        """Get a list of column names for this table."""
+        """Get a list of columns for this table.
+
+        Args:
+        ----
+            table_name: desired table
+
+        Returns:
+        -------
+            list of columns for table.
+
+        """
         return self._get_table(table_name).columns
 
     def get_insert_and_retrieve_tables(
