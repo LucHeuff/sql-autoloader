@@ -2,7 +2,7 @@ import sqlite3
 from contextlib import contextmanager
 from typing import Iterator
 
-from etl_components.connector import Cursor, DBConnector
+from etl_components.connector import DBConnector
 
 # ---- Functions for getting SQL queries for the sqlite3 connector
 
@@ -62,33 +62,40 @@ def _dict_row(cursor: sqlite3.Cursor, row: tuple) -> dict:
 # ---- functions for fetching schema information from the database
 
 
-def _get_tables(cursor: Cursor) -> list[str]:
+def _get_tables(cursor: sqlite3.Cursor) -> list[str]:
     """Get list of tables from SQLite database."""
     query = "SELECT tbl_name FROM sqlite_master WHERE type = 'table'"
     cursor.execute(query)
     return [row["tbl_name"] for row in cursor.fetchall()]
 
 
-def _get_table_schema(cursor: Cursor, table_name: str) -> str:
+def _get_table_schema(cursor: sqlite3.Cursor, table_name: str) -> str:
     """Get SQL schema for this table from SQLite database."""
     query = f"SELECT sql FROM sqlite_master WHERE tbl_name = '{table_name}'"
     cursor.execute(query)
     return cursor.fetchall()[0]["sql"]
 
 
-def _get_columns(cursor: Cursor, table_name: str) -> list[str]:
+def _get_columns(cursor: sqlite3.Cursor, table_name: str) -> list[str]:
     """Get columns for this table from SQLite database."""
     query = f"SELECT name FROM pragma_table_info('{table_name}')"
     cursor.execute(query)
     return [row["name"] for row in cursor.fetchall()]
 
 
-def _get_references(cursor: Cursor, table_name: str) -> list[dict[str, str]]:
+def _get_references(
+    cursor: sqlite3.Cursor, table_name: str
+) -> list[dict[str, str]]:
     """Get references for this table from SQLite database."""
     query = f"SELECT * FROM pragma_foreign_key_list('{table_name}')"
     cursor.execute(query)
     return [
-        {"column": row["from"], "table": row["table"], "to": row["to"]}
+        {
+            "from_table": table_name,
+            "from_column": row["from"],
+            "to_table": row["table"],
+            "to_column": row["to"],
+        }
         for row in cursor.fetchall()
     ]
 
@@ -110,10 +117,7 @@ class SQLiteConnector(DBConnector):
 
     def connect(self) -> sqlite3.Connection:
         """Make a connection to the SQLite database."""
-        connection = sqlite3.connect(
-            self.credentials,
-            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
-        )
+        connection = sqlite3.connect(self.credentials)
         connection.row_factory = _dict_row
         return connection
 
