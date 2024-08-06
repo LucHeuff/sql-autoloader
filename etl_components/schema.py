@@ -12,9 +12,6 @@ GetColumnsFunction = Callable[[str], list[str]]
 GetReferencesFunction = Callable[[str], list[dict[str, str]]]
 
 
-# TODO add docstrings to public functions
-
-
 @dataclass
 class InsertTables:
     """Contains list of tables that should either be inserted and retrieved, or only inserted."""
@@ -199,9 +196,7 @@ class Schema:
         }
         # Catching case where the combination of columns that is requested cannot be meaningfully inserted or retrieved
         if len(insert_tables) == 0:
-            message = f""" This combination of columns cannot be inserted or retrieved:\n\t {columns}
-            This usually means that the columns lead to a set of tables that results in an incomplete set of references.
-            """
+            message = f"This combination of columns cannot be inserted or retrieved:\n\t {columns}\nThis usually means that the columns lead to a set of tables that results in an incomplete set of references, or that you are trying to compare to the wrong dataset."
             raise SchemaError(message)
         return list(insert_tables)
 
