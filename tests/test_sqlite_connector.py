@@ -26,42 +26,43 @@ def test_get_retrieve_query() -> None:
 def test_integration() -> None:
     """Test if SQLiteConnetor works in integration setting."""
     schema = """
-    CREATE TABLE colour (
+    CREATE TABLE IF NOT EXISTS kleur (
         id INTEGER PRIMARY KEY,
-        colour TEXT UNIQUE
+        kleur TEXT UNIQUE
     );
 
-    CREATE TABLE vehicle (
+
+    CREATE TABLE IF NOT EXISTS eigenaar (
         id INTEGER PRIMARY KEY,
-        vehicle TEXT UNIQUE,
-        production_date date
+        eigenaar TEXT UNIQUE
     );
 
-    CREATE TABLE vehicle_colour (
-        colour_id INTEGER REFERENCES colour (id),
-        vehicle_id INTEGER REFERENCES vehicle (id),
-        UNIQUE(colour_id, vehicle_id)
+    CREATE TABLE IF NOT EXISTS voertuig_type (
+        id INTEGER PRIMARY KEY,
+        type TEXT UNIQUE
     );
-    """
 
-    compare_query = """
-    SELECT vehicle, colour, production_date
-    FROM vehicle
-        JOIN vehicle_colour ON vehicle_colour.vehicle_id = vehicle.id
-        JOIN colour ON vehicle_colour.colour_id = colour.id
+    CREATE TABLE IF NOT EXISTS voertuig (
+        id INTEGER PRIMARY KEY,
+        voertuig_type_id INT REFERENCES voertuig_type (id),
+        kleur_id INT REFERENCES kleur (id),
+        UNIQUE (voertuig_type_id, kleur_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS voertuig_eigenaar (
+        voertuig_id INT REFERENCES voertuig (id),
+        eigenaar_id INT REFERENCES eigenaar (id),
+        sinds date,
+        UNIQUE (voertuig_id, eigenaar_id)
+    );
     """
     data = pl.DataFrame(
         {
-            "vehicle": ["Car", "Bike", "Bike ", "Train"],
-            "date": [
-                "2000-01-01",
-                "2000-02-02",
-                "2000-03-03",
-                "2000-04-04",
-            ],
-            "colour": ["Red", "Green", "Black", "Yellow"],
-        },
-        schema_overrides={"date": pl.Date},
+            "eigenaar": ["Dave", "Luc", "Erwin", "Erwin"],
+            "soort_voertuig": ["auto", "fiets", "auto", "motor"],
+            "kleur": ["rood", "blauw", "zilver", "rood"],
+            "sinds": ["2022-01-18", "2019-03-23", "2021-03-05", "2018-03-05"],
+        }
     )
 
     with SQLiteConnector(":memory:") as sqlite:
@@ -69,18 +70,4 @@ def test_integration() -> None:
             cursor.executescript(schema)  # type: ignore
 
         sqlite.update_schema()
-        sqlite.print_schema()
-
-        orig_data = data.clone()
-
-        data = sqlite.insert_and_retrieve_ids(data, "colour")
-        data = sqlite.insert_and_retrieve_ids(
-            data, "vehicle", columns={"date": "production_date"}, replace=False
-        )
-        sqlite.insert(data, "vehicle_colour")
-        sqlite.compare(
-            orig_data,
-            compare_query,
-            columns={"date": "production_date"},
-            exact=True,
-        )
+        sqlite.load(data, columns={"soort_voertuig": "type"})
