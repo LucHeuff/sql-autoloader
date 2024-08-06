@@ -117,7 +117,10 @@ class SQLiteConnector(DBConnector):
 
     def connect(self) -> sqlite3.Connection:
         """Make a connection to the SQLite database."""
-        connection = sqlite3.connect(self.credentials)
+        connection = sqlite3.connect(
+            self.credentials,
+            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
+        )
         connection.row_factory = _dict_row
         return connection
 
