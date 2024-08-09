@@ -336,13 +336,11 @@ class DBConnector(ABC):
             exact: (Optional) whether all the rows in data must match all
                    the rows retrieved from the database. If False, only checks
                    if rows from data appear in rows from query.
-            where:
 
         """
         dataframe = get_dataframe(data)
         if columns is not None:
             dataframe.rename(columns)
-        data_rows = dataframe.rows()
 
         if query is None:
             query = self.schema.get_compare_query(
@@ -357,23 +355,10 @@ class DBConnector(ABC):
 
         assert len(db_rows) > 0, "Compare query yielded no results."
         assert len(db_rows) >= len(
-            data_rows
+            dataframe
         ), "Compare query yielded fewer rows than data."
 
-        # TODO data_rows and db_rows should both be lists of dicts.
-        # comparing now checks whether each row in on of the lists appears in
-        # another of the lists.
-        # This means that I can't debug where things go missings though,
-        # so I may want to write more complicated error messages here instead
-        # of simple asserts.
-
-        assert all(
-            row in db_rows for row in data_rows
-        ), "Some rows in data do not appear in database."
-        if exact:
-            assert all(
-                row in data_rows for row in db_rows
-            ), "Not all rows in data appear in database."
+        dataframe.compare(db_rows, exact=exact)
 
     # TODO do I need to be able to ignore columns?
     def load(
