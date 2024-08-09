@@ -181,6 +181,7 @@ class DBConnector(ABC):
     def insert(
         self,
         data,  # noqa: ANN001
+        *,
         table: str,
         columns: dict[str, str] | None = None,
     ) -> None:
@@ -220,9 +221,9 @@ class DBConnector(ABC):
     def retrieve_ids(  # noqa ANN201
         self,
         data,  # noqa: ANN001
+        *,
         table: str,
         columns: dict[str, str] | None = None,
-        *,
         replace: bool = True,
         allow_duplication: bool = False,
     ):
@@ -281,9 +282,9 @@ class DBConnector(ABC):
     def insert_and_retrieve_ids(
         self,
         data,  # noqa: ANN001
+        *,
         table: str,
         columns: dict[str, str] | None = None,
-        *,
         replace: bool = True,
         allow_duplication: bool = False,
     ) -> Any:  # noqa: ANN401
@@ -304,11 +305,11 @@ class DBConnector(ABC):
 
 
         """
-        self.insert(data, table, columns)
+        self.insert(data, table=table, columns=columns)
         return self.retrieve_ids(
             data,
-            table,
-            columns,
+            table=table,
+            columns=columns,
             replace=replace,
             allow_duplication=allow_duplication,
         )
@@ -316,10 +317,10 @@ class DBConnector(ABC):
     def compare(
         self,
         data,  # noqa: ANN001
+        *,
         columns: dict[str, str] | None = None,
         query: str | None = None,
         where: str | None = None,
-        *,
         exact: bool = True,
     ) -> None:
         """Compare data in the database against data in a dataframe.
@@ -360,12 +361,12 @@ class DBConnector(ABC):
 
         dataframe.compare(db_rows, exact=exact)
 
-    # TODO do I need to be able to ignore columns?
     def load(
         self,
         data,  # noqa: ANN001
-        columns: dict[str, str] | None = None,
         *,
+        columns: dict[str, str] | None = None,
+        replace: bool = True,
         allow_duplication: bool = False,
         where: str | None = None,
         exact: bool = True,
@@ -379,6 +380,8 @@ class DBConnector(ABC):
                      Dictionary of format {data_name: db_name}.
                      If the same column name appears multiple times in the database,
                      prefix the column name with the desired table, eg. <table>.<column_name>
+            replace: (Optional) whether columns can be replaced when retrieving ids.
+                     If False, id columns are concatenated.
             allow_duplication: (Optional) whether joining on ids from the database can result in
                                 rows being duplicated.
             where: (Optional) SQL WHERE clause to filter comparison data with.
@@ -401,12 +404,15 @@ class DBConnector(ABC):
         logger.debug("Inserting and retrieving tables...")
         for table in insert_lists.insert_and_retrieve:
             dataframe = self.insert_and_retrieve_ids(
-                dataframe, table, allow_duplication=allow_duplication
+                dataframe,
+                table=table,
+                replace=replace,
+                allow_duplication=allow_duplication,
             )
 
         logger.debug("Inserting tables...")
         for table in insert_lists.insert:
-            self.insert(dataframe, table)
+            self.insert(dataframe, table=table)
 
         logger.debug("Comparing...")
         self.compare(orig_dataframe, where=where, exact=exact)
