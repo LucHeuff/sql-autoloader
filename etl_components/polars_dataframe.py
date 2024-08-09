@@ -129,12 +129,8 @@ class PolarsDataFrame:
 
         """
         data_rows = self.rows()
-        print(f"{data_rows = }")
-        print(f"{db_rows = }")
         rows_in_db = [row in db_rows for row in data_rows]
-        print(f"{rows_in_db = }")
         rows_in_data = [row in data_rows for row in db_rows]
-        print(f"{rows_in_data = }")
 
         # if the comparison is set to exact, the rows from the database must
         # also all appear in the data
