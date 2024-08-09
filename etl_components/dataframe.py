@@ -5,6 +5,22 @@ class UnknownDataframeTypeError(Exception):
     """Raised when an unknown dataframe type is passed to get_dataframe()."""
 
 
+class MissingIDsError(Exception):
+    """Raised when merging data from the db results in missing values in id columns."""
+
+
+class MatchDatatypesError(Exception):
+    """Raised when matching datatypes fails."""
+
+
+class CompareMissingDataRowsError(Exception):
+    """Raised during comparison when rows from data are not in the database."""
+
+
+class CompareNoExactMatchError(Exception):
+    """Raised during comparison when rows from data and database are not an exact match."""
+
+
 @runtime_checkable
 class DataFrame(Protocol):
     """Wrapper class for dataframe-like objects."""
@@ -38,6 +54,19 @@ class DataFrame(Protocol):
         """
         ...
 
+    def match_dtypes(self, db_rows: list[dict]) -> Any:  # noqa: ANN401
+        """Create a DataFrame with matching dtypes with self.df.
+
+        Args:
+        ----
+            db_rows: rows to be converted to matching dataframe
+
+        Returns:
+        -------
+            dataframe with matching dtypes
+
+        """
+
     def merge_ids(
         self, db_fetch: list[dict], *, allow_duplication: bool = False
     ) -> None:
@@ -54,6 +83,18 @@ class DataFrame(Protocol):
 
         """
 
+    def compare(self, db_rows: list[dict], *, exact: bool = True) -> None:
+        """Compare rows from the database to rows in the dataframe.
+
+        Args:
+        ----
+            db_rows: output from cursor.fetchall() upon compare query
+            exact: (Optional) whether all the rows in data must match all the
+                    rows retrieve from the database. If False, only checks if
+                    rows from data appear in rows from query.
+
+        """
+
     @property
     def columns(self) -> list[str]:
         """Returns a list of column names."""
@@ -62,6 +103,10 @@ class DataFrame(Protocol):
     @property
     def data(self) -> Any:  # noqa: ANN401
         """Returns the data as the original dataframe type."""
+        ...
+
+    def __len__(self) -> int:
+        """Return the length of the dataframe."""
         ...
 
 

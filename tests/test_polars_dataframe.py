@@ -2,7 +2,12 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from etl_components.dataframe import get_dataframe
+from etl_components.dataframe import (
+    CompareMissingDataRowsError,
+    CompareNoExactMatchError,
+    MatchDatatypesError,
+    get_dataframe,
+)
 from etl_components.polars_dataframe import PolarsDataFrame
 
 
@@ -41,6 +46,17 @@ def test_rows() -> None:
     assert polars_df.rows(["a", "c"]) == [{"a": 1, "c": 1}]
 
 
+def test_match_dtypes() -> None:
+    """Test PandasDataFrame.match_dtypes correctly transforms columns."""
+    polars_df = PolarsDataFrame(pl.DataFrame({"a": ["A"], "b": [1]}))
+    rows = [{"a": 1, "b": "1"}, {"a": 2, "b": "2"}, {"a": 3, "b": "3"}]
+    matched_df = polars_df.match_dtypes(rows)
+    assert polars_df.data.dtypes == matched_df.dtypes
+    fail_rows = [{"b": "A"}]
+    with pytest.raises(MatchDatatypesError):
+        polars_df.match_dtypes(fail_rows)
+
+
 def test_merge_ids() -> None:
     """Test PolarsDataFrame.merge_ids() correctly merges ids."""
     polars_df = PolarsDataFrame(
@@ -65,9 +81,7 @@ def test_merge_ids() -> None:
 
 def test_merge_ids_allow_duplicate() -> None:
     """Test PolarsDataFrame.merge_ids() correctly merges ids."""
-    polars_df = PolarsDataFrame(
-        pl.DataFrame({"a": ["A", "B", "C"], "c": [1 / 3, 2 / 3, 3 / 3]})
-    )
+    polars_df = PolarsDataFrame(pl.DataFrame({"a": ["A", "B", "C"]}))
     db_fetch = [
         {"a_id": 1, "a": "A", "b": 1},
         {"a_id": 2, "a": "B", "b": 1},
@@ -79,9 +93,10 @@ def test_merge_ids_allow_duplicate() -> None:
             "a": ["A", "B", "C", "C"],
             "a_id": [1, 2, 3, 3],
             "b": [1, 1, 1, 2],
-            "c": [1 / 3, 2 / 3, 3 / 3, 3 / 3],
         }
     )
+    with pytest.raises(AssertionError):
+        polars_df.merge_ids(db_fetch)
     polars_df.merge_ids(db_fetch, allow_duplication=True)
     assert_frame_equal(
         polars_df.data,
@@ -91,20 +106,48 @@ def test_merge_ids_allow_duplicate() -> None:
     )
 
 
-def test_merge_ids_duplicate_assertion() -> None:
-    """Test PolarsDataFrame.merge_ids() correctly merges ids."""
-    polars_df = PolarsDataFrame(pl.DataFrame({"a": ["A", "B", "C"]}))
-    db_fetch = [
-        {"a_id": 1, "a": "A", "b": 1},
-        {"a_id": 2, "a": "B", "b": 1},
-        {"a_id": 3, "a": "C", "b": 1},
-        {"a_id": 3, "a": "C", "b": 2},
-    ]
-    with pytest.raises(AssertionError):
-        polars_df.merge_ids(db_fetch)
-
-
 def test_pass_dataframe() -> None:
     """Test if get_dataframe returns the PolarsDataFrame when given a PolarsDataFrame."""
     polars_df = PolarsDataFrame(pl.DataFrame())
     assert get_dataframe(polars_df) == polars_df
+
+
+def test_compare() -> None:
+    """Test if compare() functions as it is supposed to."""
+    data_rows = [
+        {"a": 1, "b": 2},
+        {"a": 2, "b": 3},
+        {"a": 3, "b": 4},
+    ]
+    fail_types = [
+        {"a": "3", "b": "4"},
+        {"a": "2", "b": "3"},
+        {"a": "1", "b": "2"},
+    ]
+    fail_db_missing = [
+        {"a": 2, "b": 3},
+        {"a": 1, "b": 2},
+    ]
+    fail_data_missing = [
+        {"a": 1, "b": 2},
+        {"a": 4, "b": 5},
+        {"a": 3, "b": 4},
+        {"a": 2, "b": 3},
+    ]
+    polars_df = PolarsDataFrame(pl.DataFrame(data_rows))
+
+    assert polars_df.compare(data_rows) is None
+    assert polars_df.compare(data_rows, exact=True) is None
+
+    # testing exact=True path
+    with pytest.raises(CompareNoExactMatchError):
+        polars_df.compare(fail_data_missing, exact=True)
+    with pytest.raises(CompareNoExactMatchError):
+        polars_df.compare(fail_db_missing, exact=True)
+    with pytest.raises(CompareNoExactMatchError):
+        polars_df.compare(fail_types, exact=True)
+
+    # testing exact=False path
+    assert polars_df.compare(fail_data_missing, exact=False) is None
+    with pytest.raises(CompareMissingDataRowsError):
+        polars_df.compare(fail_db_missing, exact=False)
