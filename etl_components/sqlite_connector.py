@@ -105,21 +105,34 @@ class SQLiteConnector(DBConnector):
 
     connection: sqlite3.Connection
 
-    def __init__(self, credentials: str) -> None:
+    def __init__(
+        self, credentials: str, *, allow_custom_dtypes: bool = False
+    ) -> None:
         """Create a SQLiteConnector that connects to the database at the given credentials.
 
         Args:
         ----
             credentials: filename of sqlite database.
+            allow_custom_dtypes: sets `detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES`
+                                 in sqlite3 connection.
+                                 NOTE: this may give confusing errors due to sqlite3
+                                 auto transforming your columns, so define your own
+                                 adapters/converters and use at your own risk!
 
         """
         self.credentials = credentials
+        self.allow_custom_dtypes = allow_custom_dtypes
 
     def connect(self) -> sqlite3.Connection:
         """Make a connection to the SQLite database."""
+        detect_types = (
+            sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
+            if self.allow_custom_dtypes
+            else 0
+        )
         connection = sqlite3.connect(
             self.credentials,
-            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
+            detect_types=detect_types,
         )
         connection.row_factory = _dict_row
         return connection

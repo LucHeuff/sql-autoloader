@@ -52,7 +52,7 @@ def test_integration() -> None:
     CREATE TABLE IF NOT EXISTS voertuig_eigenaar (
         voertuig_id INT REFERENCES voertuig (id),
         eigenaar_id INT REFERENCES eigenaar (id),
-        sinds date,
+        sinds TEXT,
         UNIQUE (voertuig_id, eigenaar_id)
     );
     """
