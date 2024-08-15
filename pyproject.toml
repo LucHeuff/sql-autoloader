@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "etl-components"
 version = "2.0.0"
-description = "Components to build ETL pipelines using pandas and psycopg or sqlite"
+description = "Components to automate loading steps in ETL pipelines"
 authors = ["Luc Heuff <10941592+LucHeuff@users.noreply.github.com>"]
 readme = "README.md"
 packages = [{include = "etl_components"}]
@@ -9,7 +9,6 @@ packages = [{include = "etl_components"}]
 
 [tool.poetry.dependencies]
 python = "^3.12"
-psycopg = "^3.1.18"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -17,7 +16,6 @@ ipython = "^8.22.1"
 ruff = "^0.2.2"
 neovim = "^0.3.1"
 pytest = "^8.0.1"
-hypothesis = "^6.98.10"
 poetry2setup = "^1.1.0"
 polars = "^0.20.31"
 pandas = "^2.2.2"
