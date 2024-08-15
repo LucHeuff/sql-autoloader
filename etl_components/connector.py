@@ -130,38 +130,18 @@ class DBConnector(ABC):
 
     # ---- methods related to the Schema
     @abstractmethod
-    def get_tables(self) -> list[str]:
+    def get_tables(self) -> list[tuple[str, list[str]]]:
         """Retrieve list of table names from the database."""
 
     @abstractmethod
-    def get_table_schema(self, table_name: str) -> str:
-        """Retrieve SQL schema for this table from the database."""
-
-    @abstractmethod
-    def get_columns(self, table_name: str) -> list[str]:
+    def get_columns(self, table_name: str) -> list[dict]:
         """Retrieve a list of columns for this table from the database."""
-
-    @abstractmethod
-    def get_references(self, table_name: str) -> list[dict[str, str]]:
-        """Retrieve a list of references for this table from the database.
-
-        Reference should be a dictionary of format
-        {
-            "from_table": <name of the current table that does the referencing>
-            "from_column": <name of reference column in current table>,
-            "to_table: <table that is referred to>,
-            "to_column": <column that is referred to>
-        }
-
-        """
 
     def get_schema(self) -> Schema:
         """Retrieve schema from the database."""
         return Schema(
             self.get_tables,
-            self.get_table_schema,
             self.get_columns,
-            self.get_references,
         )
 
     def update_schema(self) -> None:
@@ -266,8 +246,7 @@ class DBConnector(ABC):
 
         if replace:
             # Use table schema to determine which non_id columns can be dropped.
-            schema_columns = self.schema.get_columns(table)
-            non_id_columns = [col for col in schema_columns if "_id" not in col]
+            non_id_columns = self.schema.get_non_id_columns(table)
             dataframe.drop(non_id_columns)
         elif not replace and columns is not None:
             # making sure to reverse the naming of columns if they are not replaced
@@ -397,22 +376,38 @@ class DBConnector(ABC):
 
         orig_dataframe = copy(dataframe)
 
-        insert_lists = self.schema.get_insert_and_retrieve_tables(
-            dataframe.columns
-        )
+        logging.debug("Loading data using columns %s", dataframe.columns)
+
+        (
+            insert_and_retrieve,
+            insert,
+        ) = self.schema.get_insert_and_retrieve_tables(dataframe.columns)
+
+        logging.debug("Tables to insert and retrieve: %s", insert_and_retrieve)
+        logging.debug("Tables to insert: %s", insert)
+
+        def get_column_map(table: str) -> dict[str, str] | None:
+            """Translate columns prefixed with this table to their name in the schema."""
+            if columns is None:
+                return None
+            prefix = f"{table}."
+            return {
+                col: col.replace(prefix, "") for col in columns if prefix in col
+            }
 
         logger.debug("Inserting and retrieving tables...")
-        for table in insert_lists.insert_and_retrieve:
+        for table in insert_and_retrieve:
             dataframe = self.insert_and_retrieve_ids(
                 dataframe,
+                columns=get_column_map(table),
                 table=table,
                 replace=replace,
                 allow_duplication=allow_duplication,
             )
 
         logger.debug("Inserting tables...")
-        for table in insert_lists.insert:
-            self.insert(dataframe, table=table)
+        for table in insert:
+            self.insert(dataframe, table=table, columns=get_column_map(table))
 
         logger.debug("Comparing...")
         self.compare(orig_dataframe, where=where, exact=exact)

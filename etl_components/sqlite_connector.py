@@ -1,6 +1,6 @@
 import sqlite3
 from contextlib import contextmanager
-from typing import Iterator
+from typing import Callable, Iterator
 
 from etl_components.connector import DBConnector
 
@@ -62,42 +62,87 @@ def _dict_row(cursor: sqlite3.Cursor, row: tuple) -> dict:
 # ---- functions for fetching schema information from the database
 
 
-def _get_tables(cursor: sqlite3.Cursor) -> list[str]:
+def _get_unique_constraints(
+    cursor: sqlite3.Cursor,
+    table_name: str,
+    length_filter: Callable[[int], bool],
+) -> list[str]:
+    """Get a list of uniqueness constraints on a table, depending on a length filter."""
+    # SQLite stores information about unique constraints in the indexes for a table. So getting those first
+    indexes_query = f"""SELECT name FROM pragma_index_list('{table_name}') WHERE "unique" = 1 """
+    cursor.execute(indexes_query)
+    indexes = cursor.fetchall()
+    # indexes can be one or more columns long. If they are one, these are a column constraint.
+    # if they are more, they are a table constraint.
+    unique_columns = []
+    for index in indexes:
+        index_query = f"SELECT name FROM pragma_index_info('{index["name"]}')"
+        cursor.execute(index_query)
+        unique_names = cursor.fetchall()
+        if length_filter(len(unique_names)):
+            unique_columns += [u["name"] for u in unique_names]
+
+    return unique_columns
+
+
+def _get_tables(cursor: sqlite3.Cursor) -> list[tuple[str, list[str]]]:
     """Get list of tables from SQLite database."""
     query = "SELECT tbl_name FROM sqlite_master WHERE type = 'table'"
     cursor.execute(query)
-    return [row["tbl_name"] for row in cursor.fetchall()]
+    tables = [row["tbl_name"] for row in cursor.fetchall()]
+    constraints = [
+        _get_unique_constraints(cursor, table, lambda x: x > 1)
+        for table in tables
+    ]
 
-
-def _get_table_schema(cursor: sqlite3.Cursor, table_name: str) -> str:
-    """Get SQL schema for this table from SQLite database."""
-    query = f"SELECT sql FROM sqlite_master WHERE tbl_name = '{table_name}'"
-    cursor.execute(query)
-    return cursor.fetchall()[0]["sql"]
+    return list(zip(tables, constraints))
 
 
 def _get_columns(cursor: sqlite3.Cursor, table_name: str) -> list[str]:
     """Get columns for this table from SQLite database."""
-    query = f"SELECT name FROM pragma_table_info('{table_name}')"
-    cursor.execute(query)
-    return [row["name"] for row in cursor.fetchall()]
+    columns_query = f"""
+    SELECT 
+        name, 
+        type AS dtype,
+        "notnull" AS nullable,
+        "dflt_value" AS default_value,
+        pk AS primary_key 
+    FROM pragma_table_info('{table_name}')
+    """
+    references_query = f"""
+    SELECT 
+        "from" as name,
+        "table" as to_table,
+        "to" as to_column,
+        on_delete,
+        1 AS foreign_key
+    FROM pragma_foreign_key_list('{table_name}')
+    """
+    # getting column information
+    cursor.execute(columns_query)
+    columns = cursor.fetchall()
 
+    # getting foreign key information
+    cursor.execute(references_query)
+    references = cursor.fetchall()
 
-def _get_references(
-    cursor: sqlite3.Cursor, table_name: str
-) -> list[dict[str, str]]:
-    """Get references for this table from SQLite database."""
-    query = f"SELECT * FROM pragma_foreign_key_list('{table_name}')"
-    cursor.execute(query)
-    return [
-        {
-            "from_table": table_name,
-            "from_column": row["from"],
-            "to_table": row["table"],
-            "to_column": row["to"],
-        }
-        for row in cursor.fetchall()
-    ]
+    # getting columns with uniqueness constraints
+    # -> recognise column constraint refers to only one name
+    unique_columns = _get_unique_constraints(
+        cursor, table_name, lambda x: x == 1
+    )
+
+    # processing column information into the right formats
+    for col in columns:
+        col["primary_key"] = bool(col["primary_key"])
+        col["nullable"] = not col["nullable"]  # flip 'notnull' boolean
+        col["unique"] = col["name"] in unique_columns
+
+        for ref in references:
+            if col["name"] == ref["name"]:
+                col.update(ref)
+
+    return columns
 
 
 class SQLiteConnector(DBConnector):
@@ -179,22 +224,12 @@ class SQLiteConnector(DBConnector):
         """
         return _get_retrieve_query(table, columns)
 
-    def get_tables(self) -> list[str]:
+    def get_tables(self) -> list[tuple[str, list[str]]]:
         """Retrieve list of tables from the database."""
         with self.cursor() as cursor:
             return _get_tables(cursor)
-
-    def get_table_schema(self, table_name: str) -> str:
-        """Retrieve SQL schema for this table from the database."""
-        with self.cursor() as cursor:
-            return _get_table_schema(cursor, table_name)
 
     def get_columns(self, table_name: str) -> list[str]:
         """Retrieve a list of columns for this table form the database."""
         with self.cursor() as cursor:
             return _get_columns(cursor, table_name)
-
-    def get_references(self, table_name: str) -> list[dict[str, str]]:
-        """Retrieve a list of references for this table from the database."""
-        with self.cursor() as cursor:
-            return _get_references(cursor, table_name)

@@ -67,7 +67,7 @@ def test_integration() -> None:
 
     with SQLiteConnector(":memory:") as sqlite:
         with sqlite.cursor() as cursor:
-            cursor.executescript(schema)  # type: ignore
+            cursor.executescript(schema)
 
         sqlite.update_schema()
         sqlite.load(data, columns={"soort_voertuig": "type"})
