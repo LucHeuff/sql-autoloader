@@ -349,12 +349,13 @@ class DBConnector(ABC):
         allow_duplication: bool = False,
         where: str | None = None,
         exact: bool = True,
-    ) -> None:
+    ) -> Any:  # noqa: ANN401
         """Automatically load data into the database.
 
         Args:
         ----
             data: DataFrame containing data to be inserted into the database.
+            compare_query: valid SQL query to retrieve data from the database to compare against
             columns: (Optional) translation of columns in data to column names in database.
                      Dictionary of format {data_name: db_name}.
                      If the same column name appears multiple times in the database,
@@ -368,6 +369,10 @@ class DBConnector(ABC):
             exact: (Optional) whether all the rows in data must match all
                    the rows retrieved from the database in comparison. If False, only checks
                    if rows from data appear in rows from query.
+
+        Returns:
+        -------
+            dataframe in original format (pandas or polars) with id columns
 
         """
         dataframe = get_dataframe(data)
