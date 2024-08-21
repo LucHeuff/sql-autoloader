@@ -42,12 +42,18 @@ class Column:
             message = f"On column {self.name}: column says it is a foreign key, but does not refer to another table and column."
             raise ColumnError(message)
 
+    # TODO dit gaat altijd uit van to_table ON table, maar table ON to_table is ook een optie.
+    # Daar moet ruimte voor zijn?
     def get_reference(self) -> str:
         """Get a JOIN string for this reference."""
         if not self.foreign_key:
             message = f"{self.name} is not a foreign key."
             raise ColumnError(message)
-        return f"JOIN {self.to_table} ON {self.table}.{self.name} = {self.to_table}.{self.to_column}"
+        on_section = (
+            f" ON {self.table}.{self.name} = {self.to_table}.{self.to_column}"
+        )
+        # TODO dit nog verder aanpassen
+        return f"JOIN {self.to_table}" + on_section
 
     def __str__(self) -> str:
         """Get SQL schema representation of this column."""
@@ -365,6 +371,8 @@ class Schema:
         ]
         return insert_and_retrieve, insert
 
+    # TODO dit werkt niet, waarschijnlijk algoritme herontwerpen mgv graph theory
+    # om op juiste manier compare queries op te kunnen bouwen. Vooralsnog uitgezet in Connector
     def get_compare_query(
         self,
         columns: list[str],
@@ -394,15 +402,11 @@ class Schema:
         references = [
             col for table in tables for col in table.columns if col.foreign_key
         ]
-        # using the difference in the from_tables to the to_tables to figure out
-        # which table I should use in the first FROM clause
-        from_table = {col.table for col in references} - {
-            col.to_table for col in references
-        }
-        # from_table should only contain one item
+        joining_tables = {col.to_table for col in references}
+        from_table = {table.name for table in tables} - joining_tables
         assert (
             len(from_table) == 1
-        ), "Too many from_tables that do not appear in to_tables"
+        ), "More than one table remains after subtracting referring_tables from tables list based on column names."
 
         # storing a list of column objects that should be selected
         column_objects = [

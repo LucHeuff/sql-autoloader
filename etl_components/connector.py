@@ -296,9 +296,9 @@ class DBConnector(ABC):
     def compare(
         self,
         data,  # noqa: ANN001
+        query: str,
         *,
         columns: dict[str, str] | None = None,
-        query: str | None = None,
         where: str | None = None,
         exact: bool = True,
     ) -> None:
@@ -307,10 +307,9 @@ class DBConnector(ABC):
         Args:
         ----
             data: DataFrame containing data to be compared to
+            query: valid SQL query to retrieve data to compare to.
             columns: (Optional) dictionary linking column names in data with column names in dataframe
                      Example {data_name: db_name, ...}
-            query: (Optional) valid SQL query to retrieve data to compare to.
-                   If left empty, will try to automatically generate a compare query.
             where: (Optional) SQL WHERE clause to filter comparison data with.
                    NOTE: please always prefix the tables for columns you are conditioning on.
             exact: (Optional) whether all the rows in data must match all
@@ -343,6 +342,7 @@ class DBConnector(ABC):
     def load(
         self,
         data,  # noqa: ANN001
+        compare_query: str,
         *,
         columns: dict[str, str] | None = None,
         replace: bool = True,
@@ -410,6 +410,8 @@ class DBConnector(ABC):
             self.insert(dataframe, table=table, columns=get_column_map(table))
 
         logger.debug("Comparing...")
-        self.compare(orig_dataframe, where=where, exact=exact)
+        self.compare(
+            orig_dataframe, query=compare_query, where=where, exact=exact
+        )
 
         return dataframe.data

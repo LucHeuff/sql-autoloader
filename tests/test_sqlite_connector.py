@@ -56,6 +56,14 @@ def test_integration() -> None:
         UNIQUE (voertuig_id, eigenaar_id)
     );
     """
+    compare_query = """
+    SELECT eigenaar, type, kleur, sinds
+    FROM eigenaar
+    JOIN voertuig_eigenaar ON voertuig_eigenaar.eigenaar_id = eigenaar.id
+    JOIN voertuig ON voertuig_eigenaar.voertuig_id = voertuig.id
+    JOIN voertuig_type ON voertuig.voertuig_type_id = voertuig_type.id
+    JOIN kleur ON voertuig.kleur_id = kleur.id
+    """
     data = pl.DataFrame(
         {
             "eigenaar": ["Dave", "Luc", "Erwin", "Erwin"],
@@ -70,4 +78,8 @@ def test_integration() -> None:
             cursor.executescript(schema)
 
         sqlite.update_schema()
-        sqlite.load(data, columns={"soort_voertuig": "type"})
+        sqlite.load(
+            data,
+            compare_query,
+            columns={"soort_voertuig": "type"},
+        )
