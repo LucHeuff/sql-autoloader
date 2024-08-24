@@ -1,6 +1,6 @@
 import sqlite3
 from contextlib import contextmanager
-from typing import Callable, Iterator
+from typing import Callable, Iterator, Self
 
 from etl_components.connector import DBConnector
 
@@ -148,8 +148,6 @@ def _get_columns(cursor: sqlite3.Cursor, table_name: str) -> list[str]:
 class SQLiteConnector(DBConnector):
     """Connector for SQLite databases."""
 
-    connection: sqlite3.Connection
-
     def __init__(
         self, credentials: str, *, allow_custom_dtypes: bool = False
     ) -> None:
@@ -168,28 +166,46 @@ class SQLiteConnector(DBConnector):
         self.credentials = credentials
         self.allow_custom_dtypes = allow_custom_dtypes
 
-    def connect(self) -> sqlite3.Connection:
-        """Make a connection to the SQLite database."""
+    def __enter__(self) -> Self:
+        """Enter context manager for SQLiteConnector by opening a connection.
+
+        Returns
+        -------
+            instance of SQLiteConnector
+
+        """
         detect_types = (
             sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
             if self.allow_custom_dtypes
             else 0
         )
-        connection = sqlite3.connect(
-            self.credentials,
-            detect_types=detect_types,
+        self.connection = sqlite3.connect(
+            self.credentials, detect_types=detect_types
         )
-        connection.row_factory = _dict_row
-        return connection
+        self.connection.row_factory = _dict_row
+        self.connection.autocommit = False
+        return self
 
-    # Shadowing the context manager for cursor to get the correct cursor type for LSP
+    def __exit__(self, *exception: object) -> None:
+        """Exit context manager by closing connection."""
+        self.connection.close()
+
     @contextmanager
     def cursor(self) -> Iterator[sqlite3.Cursor]:
-        """Context manager for sqlite3.cursor."""
+        """Create a new cursor to the database.
+
+        Yields
+        ------
+           sqlite3.Cursor
+
+        """
         cursor = self.connection.cursor()
         try:
             yield cursor
+        except:
+            self.connection.rollback()
         finally:
+            self.connection.commit()
             cursor.close()
 
     # ---- query generation methods

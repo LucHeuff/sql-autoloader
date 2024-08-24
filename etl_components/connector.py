@@ -25,30 +25,6 @@ class Cursor(Protocol):
         """Return results from query."""
         ...
 
-    def close(self) -> None:
-        """Close the cursor."""
-        ...
-
-
-class Connection(Protocol):
-    """A connection to the database."""
-
-    def cursor(self) -> Cursor:
-        """Create a cursor."""
-        ...
-
-    def commit(self) -> None:
-        """Commit a transaction."""
-        ...
-
-    def close(self) -> None:
-        """Close the connection."""
-        ...
-
-    def rollback(self) -> None:
-        """Roll back the transaction."""
-        ...
-
 
 class DBConnector(ABC):
     """Abstract base class for connector with a database."""
@@ -56,45 +32,24 @@ class DBConnector(ABC):
     credentials: str
     schema: Schema
 
-    # ---- function for connecting to the database
+    # ---- Context managers to connect conveniently to the database
 
     @abstractmethod
-    def connect(self) -> Connection:
-        """Make a connection to the database."""
+    def __enter__(self) -> Self:
+        """Enter DBConnector context manager."""
         ...
 
-    # ---- Context managers
-
-    def __enter__(self) -> Self:
-        """Enter context manager by creating a connection with the database."""
-        self.connection = self.connect()
-        self.schema = self.get_schema()
-        return self
-
+    @abstractmethod
     def __exit__(self, *exception: object) -> None:
-        """Exit context manager by committing or rolling back on exception, and closing the connection.
+        """Exit DBConnector context manager."""
 
-        Args:
-        ----
-            exception: raised exception while inside the context manager
-
-        """
-        if exception:
-            self.connection.rollback()
-        else:
-            self.connection.commit()
-        self.connection.close()
-
+    @abstractmethod
     @contextmanager
     def cursor(self) -> Iterator[Cursor]:
-        """Context manager for cursor."""
-        cursor = self.connection.cursor()
-        try:
-            yield cursor
-        finally:
-            cursor.close()
+        """Context manager for cursor on connection."""
+        ...
 
-    # ---- methods related to generating queries
+    # ---- Methods related to generating queries
 
     @abstractmethod
     def get_insert_query(self, table: str, columns: list[str]) -> str:
@@ -128,7 +83,8 @@ class DBConnector(ABC):
         """
         ...
 
-    # ---- methods related to the Schema
+    # ---- Methods related to the Schema
+
     @abstractmethod
     def get_tables(self) -> list[tuple[str, list[str]]]:
         """Retrieve list of table names from the database."""
@@ -321,6 +277,7 @@ class DBConnector(ABC):
         if columns is not None:
             dataframe.rename(columns)
 
+        # TODO query weer optioneel maken als ik get_compare_query aan de praat heb
         if query is None:
             query = self.schema.get_compare_query(
                 dataframe.columns, where=where
