@@ -1,4 +1,7 @@
+from tempfile import NamedTemporaryFile
+
 import polars as pl
+from polars.testing import assert_frame_equal
 
 from etl_components.sqlite_connector import (
     SQLiteConnector,
@@ -73,13 +76,29 @@ def test_integration() -> None:
         }
     )
 
-    with SQLiteConnector(":memory:") as sqlite:
-        with sqlite.cursor() as cursor:
-            cursor.executescript(schema)
+    # testing against a temporary file instead of in memory, since
+    # real use probably won't be in memory either.
+    with NamedTemporaryFile(suffix=".db") as file:
+        with SQLiteConnector(file.name) as sqlite:
+            with sqlite.cursor() as cursor:
+                cursor.executescript(schema)
 
-        sqlite.update_schema()
-        sqlite.load(
-            data,
-            compare_query,
-            columns={"soort_voertuig": "type"},
+            sqlite.update_schema()
+            sqlite.load(
+                data,
+                compare_query,
+                columns={"soort_voertuig": "type"},
+            )
+
+        # Testing if the data were saved to the file as well
+        with SQLiteConnector(file.name) as sqlite:  # noqa: SIM117
+            with sqlite.cursor() as cursor:
+                cursor.execute(compare_query)
+                db_data = pl.DataFrame(cursor.fetchall())
+
+        assert_frame_equal(
+            data.rename({"soort_voertuig": "type"}),
+            db_data,
+            check_row_order=False,
+            check_column_order=False,
         )
