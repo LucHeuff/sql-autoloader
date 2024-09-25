@@ -2,11 +2,12 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
-from etl_components.dataframe import (
-    CompareMissingDataRowsError,
+from etl_components.dataframe import get_dataframe
+from etl_components.exceptions import (
+    CompareMissingRowsError,
     CompareNoExactMatchError,
     MatchDatatypesError,
-    get_dataframe,
+    MissingKeysAfterMergeError,
 )
 from etl_components.pandas_dataframe import (
     PandasDataFrame,
@@ -154,5 +155,5 @@ def test_compare() -> None:
 
     # testing exact=False path
     assert pandas_df.compare(fail_data_missing, exact=False) is None
-    with pytest.raises(CompareMissingDataRowsError):
+    with pytest.raises(CompareMissingRowsError):
         pandas_df.compare(fail_db_missing, exact=False)

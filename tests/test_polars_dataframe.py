@@ -2,11 +2,12 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from etl_components.dataframe import (
-    CompareMissingDataRowsError,
+from etl_components.dataframe import get_dataframe
+from etl_components.exceptions import (
+    CompareMissingRowsError,
     CompareNoExactMatchError,
     MatchDatatypesError,
-    get_dataframe,
+    MissingKeysAfterMergeError,
 )
 from etl_components.polars_dataframe import PolarsDataFrame
 
@@ -149,5 +150,5 @@ def test_compare() -> None:
 
     # testing exact=False path
     assert polars_df.compare(fail_data_missing, exact=False) is None
-    with pytest.raises(CompareMissingDataRowsError):
+    with pytest.raises(CompareMissingRowsError):
         polars_df.compare(fail_db_missing, exact=False)

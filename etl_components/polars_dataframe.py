@@ -1,11 +1,11 @@
 import polars as pl
 from polars.exceptions import ComputeError
 
-from etl_components.dataframe import (
-    CompareMissingDataRowsError,
+from etl_components.exceptions import (
+    CompareMissingRowsError,
     CompareNoExactMatchError,
     MatchDatatypesError,
-    MissingIDsError,
+    MissingKeysAfterMergeError,
 )
 
 
@@ -115,7 +115,7 @@ class PolarsDataFrame:
                 pl.any_horizontal(id_cols).is_null()
             )
             message = "Some id's were returned as NA:\n"
-            raise MissingIDsError(message + str(rows_with_missings))
+            raise MissingKeysAfterMergeError(message + str(rows_with_missings))
 
     def compare(self, db_rows: list[dict], *, exact: bool = True) -> None:
         """Compare rows from the database to rows in the dataframe.
@@ -152,7 +152,7 @@ class PolarsDataFrame:
                 ~pl.Series(rows_in_db)
             )
             message = f"Some rows from data were not found in the database:\n{missing_rows}"
-            raise CompareMissingDataRowsError(message)
+            raise CompareMissingRowsError(message)
 
     @property
     def columns(self) -> list[str]:

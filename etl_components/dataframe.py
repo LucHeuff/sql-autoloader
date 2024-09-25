@@ -1,24 +1,6 @@
 from typing import Any, Protocol, runtime_checkable
 
-
-class UnknownDataframeTypeError(Exception):
-    """Raised when an unknown dataframe type is passed to get_dataframe()."""
-
-
-class MissingIDsError(Exception):
-    """Raised when merging data from the db results in missing values in id columns."""
-
-
-class MatchDatatypesError(Exception):
-    """Raised when matching datatypes fails."""
-
-
-class CompareMissingDataRowsError(Exception):
-    """Raised during comparison when rows from data are not in the database."""
-
-
-class CompareNoExactMatchError(Exception):
-    """Raised during comparison when rows from data and database are not an exact match."""
+from etl_components.exceptions import UnknownDataframeError
 
 
 @runtime_checkable
@@ -139,4 +121,4 @@ def get_dataframe(df) -> DataFrame:  # noqa: ANN001
             message = (
                 "Expecting pandas or polars dataframe, but got {type(df)}."
             )
-            raise UnknownDataframeTypeError(message)
+            raise UnknownDataframeError(message)

@@ -2,7 +2,8 @@ import pandas as pd
 import polars as pl
 import pytest
 
-from etl_components.dataframe import UnknownDataframeTypeError, get_dataframe
+from etl_components.dataframe import get_dataframe
+from etl_components.exceptions import UnknownDataframeError
 from etl_components.pandas_dataframe import PandasDataFrame
 from etl_components.polars_dataframe import PolarsDataFrame
 
@@ -21,5 +22,5 @@ def test_get_pandas_dataframe() -> None:
 
 def test_get_dataframe_exception() -> None:
     """Test whether get_dataframe returns an exception with an unknown data type."""
-    with pytest.raises(UnknownDataframeTypeError):
+    with pytest.raises(UnknownDataframeError):
         get_dataframe(1)

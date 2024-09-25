@@ -1,10 +1,10 @@
 import pandas as pd
 
-from etl_components.dataframe import (
-    CompareMissingDataRowsError,
+from etl_components.exceptions import (
+    CompareMissingRowsError,
     CompareNoExactMatchError,
     MatchDatatypesError,
-    MissingIDsError,
+    MissingKeysAfterMergeError,
 )
 
 
@@ -117,7 +117,7 @@ class PandasDataFrame:
         if bool(missing_ids.any(axis=None)):
             rows_with_missings = self.df[missing_ids.any(axis=1)]
             message = "Some id's were returned as NA:\n"
-            raise MissingIDsError(message + str(rows_with_missings))
+            raise MissingKeysAfterMergeError(message + str(rows_with_missings))
 
     def compare(self, db_rows: list[dict], *, exact: bool = True) -> None:
         """Compare rows from the database to rows in the dataframe.
@@ -151,7 +151,7 @@ class PandasDataFrame:
             # checking which rows do not appear in dataframe
             missing_rows = self.df[~pd.Series(rows_in_db)]
             message = f"Some rows from data were not found in the database:\n{missing_rows}"
-            raise CompareMissingDataRowsError(message)
+            raise CompareMissingRowsError(message)
 
     @property
     def columns(self) -> list[str]:
