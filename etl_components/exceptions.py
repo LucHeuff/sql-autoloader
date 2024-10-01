@@ -24,3 +24,11 @@ class CompareNoExactMatchError(ETLComponentsError):
 
 class SchemaError(ETLComponentsError):
     """Raised when an error occurs when using the Schema."""
+
+
+class InvalidTableError(ETLComponentsError):
+    """Raised when Table validation fails."""
+
+
+class InvalidReferenceError(ETLComponentsError):
+    """Raised when Reference validation fails."""
