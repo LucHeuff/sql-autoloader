@@ -1,6 +1,6 @@
 import sqlite3
 from contextlib import contextmanager
-from typing import Callable, Iterator, Self
+from typing import Iterator, Self
 
 from etl_components.connector import DBConnector
 from etl_components.schema import ReferenceDict, TableDict
@@ -26,12 +26,16 @@ def _get_insert_query(table: str, columns: list[str]) -> str:
     return f"INSERT OR IGNORE INTO {table} ({columns_section}) VALUES ({values_section})"
 
 
-def _get_retrieve_query(table: str, columns: list[str]) -> str:
+def _get_retrieve_query(
+    table: str, key: str, alias: str, columns: list[str]
+) -> str:
     """Get a retrieve query appropriate for a SQLite database.
 
     Args:
     ----
         table: to retrieve from
+        key: name of the primary key
+        alias: for the primary key
         columns: to read values from
 
     Returns:
@@ -40,7 +44,7 @@ def _get_retrieve_query(table: str, columns: list[str]) -> str:
 
     """
     columns_section = ", ".join(columns)
-    return f"SELECT id as {table}_id, {columns_section} FROM {table}"
+    return f"SELECT {key} as {alias}, {columns_section} FROM {table}"
 
 
 def _dict_row(cursor: sqlite3.Cursor, row: tuple) -> dict:
@@ -208,12 +212,16 @@ class SQLiteConnector(DBConnector):
         """
         return _get_insert_query(table, columns)
 
-    def get_retrieve_query(self, table: str, columns: list[str]) -> str:
+    def get_retrieve_query(
+        self, table: str, key: str, alias: str, columns: list[str]
+    ) -> str:
         """Get a retrieve query appropriate for a SQLite database.
 
         Args:
         ----
             table: to retrieve from
+            key: name of the primary key
+            alias: for the primary key
             columns: to read values from
 
         Returns:
@@ -221,12 +229,7 @@ class SQLiteConnector(DBConnector):
             valid insert query
 
         """
-        return _get_retrieve_query(table, columns)
-
-    def get_tables(self) -> list[tuple[str, list[str]]]:
-        """Retrieve list of tables from the database."""
-        with self.cursor() as cursor:
-            return _get_tables(cursor)
+        return _get_retrieve_query(table, key, alias, columns)
 
     def fetch_schema(self) -> tuple[list[TableDict], list[ReferenceDict]]:
         """Retrieve schema from the database."""

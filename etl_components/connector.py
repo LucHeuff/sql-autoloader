@@ -68,12 +68,16 @@ class DBConnector(ABC):
         ...
 
     @abstractmethod
-    def get_retrieve_query(self, table: str, columns: list[str]) -> str:
+    def get_retrieve_query(
+        self, table: str, key: str, alias: str, columns: list[str]
+    ) -> str:
         """Get a retrieve query for this Connector.
 
         Args:
         ----
             table: to retrieve from
+            key: name of the primary key
+            alias: for the primary key
             columns: to read values from
 
         Returns:
