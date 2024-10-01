@@ -21,58 +21,87 @@ def test_get_insert_query() -> None:
 def test_get_retrieve_query() -> None:
     """Test if _get_retrieve_query() works as intended."""
     table = "fiets"
+    key = "id"
+    alias = "fiets_id"
     columns = ["kleur", "zadel", "wielen"]
     query = "SELECT id as fiets_id, kleur, zadel, wielen FROM fiets"
-    assert _get_retrieve_query(table, columns) == query
+    assert _get_retrieve_query(table, key, alias, columns) == query
 
 
 def test_integration() -> None:
     """Test if SQLiteConnetor works in integration setting."""
     schema = """
-    CREATE TABLE IF NOT EXISTS kleur (
-        id INTEGER PRIMARY KEY,
-        kleur TEXT UNIQUE
+    CREATE TABLE eigenaar (
+      id INTEGER PRIMARY KEY,
+      naam TEXT UNIQUE NOT NULL
     );
 
+    CREATE TABLE merk (id INTEGER PRIMARY KEY, naam TEXT UNIQUE NOT NULL);
 
-    CREATE TABLE IF NOT EXISTS eigenaar (
-        id INTEGER PRIMARY KEY,
-        eigenaar TEXT UNIQUE
+    CREATE TABLE voertuig_type (id INTEGER PRIMARY KEY, naam TEXT UNIQUE NOT NULL);
+
+    CREATE TABLE dealer (
+      id INTEGER PRIMARY KEY,
+      naam TEXT UNIQUE NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS voertuig_type (
-        id INTEGER PRIMARY KEY,
-        type TEXT UNIQUE
+    CREATE TABLE voertuig (
+      id INTEGER PRIMARY KEY,
+      type_id INTEGER REFERENCES voertuig_type (id),
+      merk_id INTEGER REFERENCES merk (id),
+      UNIQUE (type_id, merk_id)
     );
 
-    CREATE TABLE IF NOT EXISTS voertuig (
-        id INTEGER PRIMARY KEY,
-        voertuig_type_id INT REFERENCES voertuig_type (id),
-        kleur_id INT REFERENCES kleur (id),
-        UNIQUE (voertuig_type_id, kleur_id)
+    CREATE TABLE merk_dealer (
+      id INTEGER PRIMARY KEY,
+      merk_id INTEGER REFERENCES merk (id),
+      dealer_id INTEGER REFERENCES dealer (id),
+      UNIQUE (merk_id, dealer_id)
     );
 
-    CREATE TABLE IF NOT EXISTS voertuig_eigenaar (
-        voertuig_id INT REFERENCES voertuig (id),
-        eigenaar_id INT REFERENCES eigenaar (id),
-        sinds TEXT,
-        UNIQUE (voertuig_id, eigenaar_id)
+    CREATE TABLE voertuig_eigenaar (
+      eigenaar_id INTEGER REFERENCES eigenaar (id),
+      voertuig_id INTEGER REFERENCES voertuig (id),
+      UNIQUE (voertuig_id, eigenaar_id)
+    );
+
+    CREATE TABLE aankoop (
+      voertuig_id INTEGER REFERENCES voertuig (id),
+      dealer_id INTEGER REFERENCES dealer (id),
+      datum TEXT,
+      UNIQUE (voertuig_id, dealer_id, datum)
     );
     """
+
     compare_query = """
-    SELECT eigenaar, type, kleur, sinds
-    FROM eigenaar
-    JOIN voertuig_eigenaar ON voertuig_eigenaar.eigenaar_id = eigenaar.id
-    JOIN voertuig ON voertuig_eigenaar.voertuig_id = voertuig.id
-    JOIN voertuig_type ON voertuig.voertuig_type_id = voertuig_type.id
-    JOIN kleur ON voertuig.kleur_id = kleur.id
+    SELECT
+      eigenaar.naam as eigenaar,
+      voertuig_type.naam as type,
+      merk.naam as merk,
+      dealer.naam as dealer,
+      aankoop.datum as aankoop
+    FROM
+      eigenaar
+      LEFT JOIN voertuig_eigenaar ON voertuig_eigenaar.eigenaar_id = eigenaar.id
+      LEFT JOIN voertuig ON voertuig_eigenaar.voertuig_id = voertuig.id
+      LEFT JOIN voertuig_type ON voertuig.type_id = voertuig_type.id
+      LEFT JOIN merk ON voertuig.merk_id = merk.id
+      LEFT JOIN merk_dealer ON merk_dealer.merk_id = merk.id
+      LEFT JOIN dealer ON merk_dealer.dealer_id = dealer.id
+      LEFT JOIN aankoop ON aankoop.voertuig_id = voertuig.id;
     """
     data = pl.DataFrame(
         {
-            "eigenaar": ["Dave", "Luc", "Erwin", "Erwin"],
-            "soort_voertuig": ["auto", "fiets", "auto", "motor"],
-            "kleur": ["rood", "blauw", "zilver", "rood"],
-            "sinds": ["2022-01-18", "2019-03-23", "2021-03-05", "2018-03-05"],
+            "eigenaar": ["Luc", "Dave", "Erwin", "Erwin"],
+            "soort_voertuig": ["fiets", "auto", "auto", "motor"],
+            "merk": ["Batavus", "Renault", "Toyota", "Kawasaki"],
+            "dealer": [
+                None,
+                "Zoest Occasions",
+                "Zoest Occasions",
+                "Berts Tweewielers",
+            ],
+            "aankoop": [None, "2021-06-25", "2022-10-13", "2020-02-03"],
         }
     )
 
