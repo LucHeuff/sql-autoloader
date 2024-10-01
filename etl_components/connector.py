@@ -5,7 +5,7 @@ from copy import copy
 from typing import Any, Iterator, Protocol, Self
 
 from etl_components.dataframe import DataFrame, get_dataframe
-from etl_components.schema import Schema
+from etl_components.schema import ReferenceDict, Schema, TableDict
 
 logger = logging.getLogger(__name__)
 
@@ -86,19 +86,12 @@ class DBConnector(ABC):
     # ---- Methods related to the Schema
 
     @abstractmethod
-    def get_tables(self) -> list[tuple[str, list[str]]]:
-        """Retrieve list of table names from the database."""
-
-    @abstractmethod
-    def get_columns(self, table_name: str) -> list[dict]:
-        """Retrieve a list of columns for this table from the database."""
+    def fetch_schema(self) -> tuple[list[TableDict], list[ReferenceDict]]:
+        """Retrieve schema from the database."""
 
     def get_schema(self) -> Schema:
         """Retrieve schema from the database."""
-        return Schema(
-            self.get_tables,
-            self.get_columns,
-        )
+        return Schema(self.fetch_schema)
 
     def update_schema(self) -> None:
         """Update schema from database manually.
