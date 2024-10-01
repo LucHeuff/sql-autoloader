@@ -9,6 +9,8 @@ packages = [{include = "etl_components"}]
 
 [tool.poetry.dependencies]
 python = "^3.12"
+networkx = "^3.3"
+pydantic = "^2.9.2"
 
 
 [tool.poetry.group.dev.dependencies]
