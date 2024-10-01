@@ -204,6 +204,7 @@ class SQLiteConnector(DBConnector):
             yield cursor
         except:
             self.connection.rollback()
+            raise  # this makes sure the exception ir reraised
         finally:
             self.connection.commit()
             cursor.close()
