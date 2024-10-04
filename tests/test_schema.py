@@ -135,8 +135,8 @@ def test_schema() -> None:
         {
             "name": "merk_dealer",
             "columns": [],
-            "primary_key": "id",
-            "foreign_keys": ["type_id", "merk_id"],
+            "primary_key": "",
+            "foreign_keys": ["dealer_id", "merk_id"],
         },
         {
             "name": "voertuig_eigenaar",
@@ -270,6 +270,8 @@ def test_schema() -> None:
         assert set(schema.parse_insert(test_table, test_columns)) == set(
             test_columns
         )
+
+    # ---- Testing parse_retrieve
 
     # test if exception if raised for empty list of columns
     with pytest.raises(EmptyColumnListError):
