@@ -157,6 +157,7 @@ class DBConnector(ABC):
         data,  # noqa: ANN001
         *,
         table: str,
+        alias: str,
         columns: dict[str, str] | None = None,
         replace: bool = True,
         allow_duplication: bool = False,
@@ -167,6 +168,7 @@ class DBConnector(ABC):
         ----
             data: DataFrame containing the data for which ids need to be retrieved and joined
             table: table to retrieve ids from
+            alias: of the primary key of table
             columns: (Optional) dictionary linking column names in data with column names in dataframe
                      Example {data_name: db_name, ...}
                      If left empty, will assume that column names to retrieve ids on
@@ -183,10 +185,14 @@ class DBConnector(ABC):
         if columns is not None:
             dataframe.rename(columns)
 
-        common_columns = self.schema.parse_input(table, dataframe.columns)
-        query = self.get_retrieve_query(table, common_columns)
+        # TODO this feels like an awkward data structure
+        key, common_columns = self.schema.parse_retrieve(
+            table, alias, dataframe.columns
+        )
+
+        query = self.get_retrieve_query(table, key, alias, common_columns)
         logger.debug(
-            "Retrieving %s from %s using query:\n\t%s",
+            "Retrieving %s from %s using query:\n%s",
             common_columns,
             table,
             query,
@@ -216,6 +222,7 @@ class DBConnector(ABC):
         data,  # noqa: ANN001
         *,
         table: str,
+        alias: str,
         columns: dict[str, str] | None = None,
         replace: bool = True,
         allow_duplication: bool = False,
@@ -224,6 +231,7 @@ class DBConnector(ABC):
 
             data: DataFrame containing the data for which ids need to be retrieved and joined
             table: table to retrieve ids from
+            alias: of the primary key of table
             columns: (Optional) dictionary linking column names in data with column names in dataframe
                      Example {data_name: db_name, ...}
                      If left empty, will assume that column names to retrieve ids on
@@ -241,6 +249,7 @@ class DBConnector(ABC):
         return self.retrieve_ids(
             data,
             table=table,
+            alias=alias,
             columns=columns,
             replace=replace,
             allow_duplication=allow_duplication,
@@ -337,6 +346,8 @@ class DBConnector(ABC):
 
         logging.debug("Loading data using columns %s", dataframe.columns)
 
+        # TODO 1 This looks horrible, I should be able to return a better datastructure
+        # TODO 2 alias needs to be retrieved here as well
         (
             insert_and_retrieve,
             insert,
