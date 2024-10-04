@@ -170,6 +170,7 @@ class SQLiteConnector(DBConnector):
         )
         self.connection.row_factory = _dict_row
         self.connection.autocommit = False
+        self.schema = self.get_schema()
         return self
 
     def __exit__(self, *exception: object) -> None:
