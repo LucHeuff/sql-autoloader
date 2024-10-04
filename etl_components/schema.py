@@ -122,10 +122,10 @@ class Schema:
         for reference_dict in reference_dicts:
             reference = Reference(**reference_dict)
             self.graph.add_edge(
-                reference.from_table, reference.to_table, reference=reference
+                reference.to_table, reference.from_table, reference=reference
             )
 
-    # Private methods
+    # ---- Private methods
 
     def _get_table(self, table_name: str) -> Table:
         """Retrieve Table with this name.
@@ -162,10 +162,7 @@ class Schema:
            list of columns that are not primary or foreign keys
 
         """
-        if not table_name in self.graph.nodes:
-            message = f"table {table_name} does not appear in the schema."
-            raise SchemaError(message)
-        return self.graph.nodes[table_name]["table"].columns
+        return self._get_table(table_name).columns
 
     def get_compare_query(
         self,
@@ -186,6 +183,7 @@ class Schema:
 
         """
 
+    # TODO return better datastructure
     def get_insert_and_retrieve_tables(
         self, columns: list[str]
     ) -> tuple[list[str], list[str]]:
@@ -295,7 +293,7 @@ class Schema:
         common = set(columns) & set(table.columns_and_foreign_keys)
         return table.primary_key, list(common)
 
-    # Properties and dunder methods
+    # ---- Properties and dunder methods
 
     @cached_property
     def _column_table_mapping(self) -> dict[str, list[str]]:
