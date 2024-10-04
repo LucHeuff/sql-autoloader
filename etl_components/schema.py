@@ -36,6 +36,11 @@ class Table(BaseModel):
         return self
 
     @property
+    def columns_and_foreign_keys(self) -> list[str]:
+        """Return both the columns and the foreign keys for this table."""
+        return self.columns + self.foreign_keys
+
+    @property
     def has_primary_key(self) -> bool:
         """Return whether the table has a primary key."""
         return bool(self.primary_key)
