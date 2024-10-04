@@ -203,6 +203,28 @@ class Schema:
 
         """
 
+    def _parse_columns(self, table: Table, columns: list[str]) -> None:
+        """Check if columns list is not empty and that columns exist in table.
+
+        Args:
+        ----
+            table: under consideration
+            columns: list of columns that are to be inserted or retrieved with
+
+        Raises:
+        ------
+            EmptyColumnListError: when list is empty
+            ColumnsDoNotExistError: when none of the columns exist in the table.
+
+        """
+        if len(columns) == 0:
+            message = "Provided list of columns cannot be empty"
+            raise EmptyColumnListError(message)
+
+        if not any(col in table.columns_and_foreign_keys for col in columns):
+            message = f"None of {columns} exist in {table.name}. Table schema is:\n{table}"
+            raise ColumnsDoNotExistError(message)
+
     def parse_insert(self, table_name: str, columns: list[str]) -> list[str]:
         """Parse input values for insert or retrieve query, and return columns that table and data have in common.
 
@@ -214,10 +236,6 @@ class Schema:
             table_name: name of table to be inserted into
             columns: list of columns in dataframe
 
-        Raises:
-        ------
-            SchemaError: when no columns exist for that table
-
         Returns:
         -------
             list of columns that table and data have in common.
@@ -225,15 +243,7 @@ class Schema:
         """
         table = self._get_table(table_name)
 
-        if len(columns) == 0:
-            message = (
-                "Provided list of columns is empty, cannot insert no columns."
-            )
-            raise SchemaError(message)
-
-        if not any(col in table.columns_and_foreign_keys for col in columns):
-            message = f"None of {columns} exist in {table_name}. Table schema is:\n{table}"
-            raise SchemaError(message)
+        self._parse_columns(table, columns)
 
         common = set(columns) & set(table.columns_and_foreign_keys)
         return list(common)
