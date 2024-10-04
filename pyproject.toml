@@ -11,6 +11,7 @@ packages = [{include = "etl_components"}]
 python = "^3.12"
 networkx = "^3.3"
 pydantic = "^2.9.2"
+more-itertools = "^10.5.0"
 
 
 [tool.poetry.group.dev.dependencies]

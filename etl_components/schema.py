@@ -2,6 +2,7 @@ from functools import cached_property
 from typing import Annotated, Callable, Self, TypedDict
 
 import networkx as nx
+from more_itertools import unique
 from pydantic import (
     BaseModel,
     StringConstraints,
@@ -248,6 +249,9 @@ class Schema:
         common = set(columns) & set(table.columns_and_foreign_keys)
         return list(common)
 
+    def parse_retrieve(
+        self, table_name: str, alias: str, columns: list[str]
+    ) -> tuple[str, list[str]]:
         """Parse input values for insert or retrieve query, and return columns that table and data have in common.
 
         Checks whether table exists in the database,
@@ -256,17 +260,40 @@ class Schema:
         Args:
         ----
             table_name: name of table to be inserted into
+            alias: of the primary key of the table
             columns: list of columns in dataframe
 
         Raises:
         ------
-            SchemaError: when no columns exist for that table
+            NoPrimaryKeyError: when the table does not have a primary key
+            AliasDoesNotExistError: when the alias does not appear in the schema
 
         Returns:
         -------
             list of columns that table and data have in common.
 
         """
+        table = self._get_table(table_name)
+
+        if not table.has_primary_key:
+            message = f"Table {table_name} does not have a primary key. It does not make sense to retrieve ids from it."
+            raise NoPrimaryKeyError(message)
+
+        # checking if alias appears in the schema
+        edges = self.graph.edges(table_name)
+        references = [
+            self.graph.get_edge_data(*edge)["reference"] for edge in edges
+        ]
+        if not alias in unique(
+            [reference.from_key for reference in references]
+        ):
+            message = f"Alias '{alias}' does not appear anywhere in the schema for table {table_name}."
+            raise AliasDoesNotExistError(message)
+
+        self._parse_columns(table, columns)
+
+        common = set(columns) & set(table.columns_and_foreign_keys)
+        return table.primary_key, list(common)
 
     # Properties and dunder methods
 

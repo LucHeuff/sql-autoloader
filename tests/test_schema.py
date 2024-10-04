@@ -271,3 +271,32 @@ def test_schema() -> None:
             test_columns
         )
 
+    # test if exception if raised for empty list of columns
+    with pytest.raises(EmptyColumnListError):
+        schema.parse_retrieve("eigenaar", "eigenaar_id", [])
+    # test if exception is raised for nonexisting columns
+    with pytest.raises(ColumnsDoNotExistError):
+        schema.parse_retrieve("eigenaar", "eigenaar_id", ["fiets", "trein"])
+    # test if exception is raised when trying to retrieve from a table without a primary key
+    with pytest.raises(NoPrimaryKeyError):
+        schema.parse_retrieve("merk_dealer", "merk_dealer_id", ["naam"])
+        # # test if exception is raised for nonexisting foreign key alias
+    with pytest.raises(AliasDoesNotExistError):
+        schema.parse_retrieve("eigenaar", "fiets_id", ["naam"])
+
+    test_retrieve = [
+        # format: table, alias, columns
+        ("eigenaar", "eigenaar_id", ["naam"], "id"),
+        ("merk", "merk_id", ["naam"], "id"),
+        ("dealer", "dealer_id", ["naam"], "id"),
+        ("voertuig_type", "type_id", ["naam"], "id"),
+        ("voertuig", "voertuig_id", ["type_id", "merk_id"], "id"),
+    ]
+
+    for test in test_retrieve:
+        test_table, test_alias, test_columns, test_key = test
+        out_key, out_columns = schema.parse_retrieve(
+            test_table, test_alias, test_columns
+        )
+        assert test_key == out_key
+        assert set(out_columns) == set(test_columns)
