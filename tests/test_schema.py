@@ -209,7 +209,7 @@ def test_schema() -> None:
 
     schema = Schema(get_schema)
 
-    # -- Testing Schema.get_columns
+    # --- Testing Schema.get_columns
 
     # Testing if correct exception is raised when the table does not exist
     with pytest.raises(SchemaError):
@@ -224,14 +224,14 @@ def test_schema() -> None:
     assert schema.get_columns("voertuig_eigenaar") == []
     assert schema.get_columns("aankoop") == ["datum"]
 
-    # -- Testing schema._get_table
+    # --- Testing schema._get_table
     with pytest.raises(SchemaError):
         schema._get_table("trein")
 
     for table in tables:
         assert schema._get_table(table["name"]) == Table(**table)
 
-    # -- Testing column_table_mapping
+    # --- Testing column_table_mapping
 
     # first inverting the mapping from tables
     mapping = {}
