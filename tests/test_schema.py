@@ -2,9 +2,13 @@
 import pytest
 
 from etl_components.exceptions import (
+    AliasDoesNotExistError,
+    ColumnsDoNotExistError,
+    EmptyColumnListError,
     InvalidReferenceError,
     InvalidTableError,
-    SchemaError,
+    NoPrimaryKeyError,
+    TableDoesNotExistError,
 )
 from etl_components.schema import (
     Reference,
@@ -208,7 +212,7 @@ def test_schema() -> None:
     # --- Testing Schema.get_columns
 
     # Testing if correct exception is raised when the table does not exist
-    with pytest.raises(SchemaError):
+    with pytest.raises(TableDoesNotExistError):
         schema.get_columns("trein")
 
     assert schema.get_columns("eigenaar") == ["naam"]
@@ -221,7 +225,7 @@ def test_schema() -> None:
     assert schema.get_columns("aankoop") == ["datum"]
 
     # --- Testing schema._get_table
-    with pytest.raises(SchemaError):
+    with pytest.raises(TableDoesNotExistError):
         schema._get_table("trein")
 
     for table in tables:
@@ -243,10 +247,10 @@ def test_schema() -> None:
     # --- Testing parse_insert
 
     # test if exception is raised for empty list of columns
-    with pytest.raises(SchemaError):
+    with pytest.raises(EmptyColumnListError):
         schema.parse_insert("eigenaar", [])
     # test if exception is raised for nonexisting columns
-    with pytest.raises(SchemaError):
+    with pytest.raises(ColumnsDoNotExistError):
         schema.parse_insert("eigenaar", ["fiets", "trein"])
 
     for table_name in schema.graph.nodes:

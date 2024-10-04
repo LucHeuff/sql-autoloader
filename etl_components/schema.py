@@ -9,9 +9,13 @@ from pydantic import (
 )
 
 from etl_components.exceptions import (
+    AliasDoesNotExistError,
+    ColumnsDoNotExistError,
+    EmptyColumnListError,
     InvalidReferenceError,
     InvalidTableError,
-    SchemaError,
+    NoPrimaryKeyError,
+    TableDoesNotExistError,
 )
 
 
@@ -123,12 +127,27 @@ class Schema:
     # Private methods
 
     def _get_table(self, table_name: str) -> Table:
+        """Retrieve Table with this name.
+
+        Args:
+        ----
+            table_name: of the desired table
+
+        Returns:
+        -------
+           corresponding Table object
+
+        Raises:
+        ------
+            TableDoesNotExistError: if table does not exist in schema.
+
+        """
         if not table_name in self.graph.nodes:
             message = f"table '{table_name}' does not appear in schema."
-            raise SchemaError(message)
+            raise TableDoesNotExistError(message)
         return self.graph.nodes[table_name]["table"]
 
-    # Public methods
+    # ---- Public methods
 
     def get_columns(self, table_name: str) -> list[str]:
         """Get a list of columns that are not primary or foreign keys for this table.

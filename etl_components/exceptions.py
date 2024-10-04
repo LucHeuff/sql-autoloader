@@ -22,8 +22,29 @@ class CompareNoExactMatchError(ETLComponentsError):
     """Raised during comparison when rows from data and rows from database are no exact match."""
 
 
+# ---- SchemaError and children
 class SchemaError(ETLComponentsError):
     """Raised when an error occurs when using the Schema."""
+
+
+class TableDoesNotExistError(SchemaError):
+    """Raised when the requested table does not exist in the Schema."""
+
+
+class EmptyColumnListError(SchemaError):
+    """Raised when an empty list of columns is passed."""
+
+
+class ColumnsDoNotExistError(SchemaError):
+    """Raised when all the columns do not exist on a Table."""
+
+
+class NoPrimaryKeyError(SchemaError):
+    """Raised when the Table has no primary key."""
+
+
+class AliasDoesNotExistError(SchemaError):
+    """Raised when the provided alias does not exist."""
 
 
 class InvalidTableError(ETLComponentsError):
