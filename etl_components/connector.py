@@ -200,8 +200,7 @@ class DBConnector(ABC):
 
         if replace:
             # Use table schema to determine which non_id columns can be dropped.
-            non_id_columns = self.schema.get_non_id_columns(table)
-            dataframe.drop(non_id_columns)
+            dataframe.drop(self.schema.get_columns(table))
         elif not replace and columns is not None:
             # making sure to reverse the naming of columns if they are not replaced
             reverse_columns = {v: k for (k, v) in columns.items()}
