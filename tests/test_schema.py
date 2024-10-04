@@ -41,27 +41,23 @@ def test_table() -> None:
     only_foreign_table = Table(**only_foreign)
 
     assert full_table.has_primary_key == True
-    assert full_table.has_foreign_key == True
     assert (
         str(full_table)
         == "Table full (\n\tid\n\thalf_id\n\tquarter_id\n\tone\n\ttwo\n\tthree\n)"
     )
 
     assert no_foreign_table.has_primary_key == True
-    assert no_foreign_table.has_foreign_key == False
     assert (
         str(no_foreign_table)
         == "Table no_foreign (\n\tkey\n\tone\n\ttwo\n\tthree\n)"
     )
 
     assert only_columns_table.has_primary_key == False
-    assert only_columns_table.has_foreign_key == False
     assert str(only_columns_table) == str(
         "Table only_columns (\n\tone\n\ttwo\n\tthree\n)"
     )
 
     assert only_foreign_table.has_primary_key == False
-    assert only_foreign_table.has_foreign_key == True
     assert (
         str(only_foreign_table)
         == "Table only_foreign (\n\thalf_id\n\tquarter_id\n)"

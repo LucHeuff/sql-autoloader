@@ -21,7 +21,7 @@ class Table(BaseModel):
     name: str
     columns: list[str]
     primary_key: str = ""
-    foreign_keys: list[str] = []  # TODO do I need this?
+    foreign_keys: list[str] = []
 
     @model_validator(mode="after")
     def verify_not_empty(self) -> Self:
@@ -44,12 +44,6 @@ class Table(BaseModel):
     def has_primary_key(self) -> bool:
         """Return whether the table has a primary key."""
         return bool(self.primary_key)
-
-    # TODO do I need this?
-    @property
-    def has_foreign_key(self) -> bool:
-        """Return whether the table has at least one foreign key."""
-        return bool(self.foreign_keys)
 
     def __str__(self) -> str:
         """Return human readable representation of the table."""
