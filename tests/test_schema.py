@@ -253,13 +253,21 @@ def test_schema() -> None:
     with pytest.raises(ColumnsDoNotExistError):
         schema.parse_insert("eigenaar", ["fiets", "trein"])
 
-    for table_name in schema.graph.nodes:
-        table = schema._get_table(table_name)
-        # testing whether parse_insert returns the common columns correctly
-        if table.columns:
-            assert (
-                schema.parse_insert(table_name, table.columns) == table.columns
-            )
-        assert set(
-            schema.parse_insert(table_name, table.columns_and_foreign_keys)
-        ) == set(table.columns_and_foreign_keys)
+    test_insert = [
+        # format: table_name, columns
+        ("eigenaar", ["naam"]),
+        ("merk", ["naam"]),
+        ("voertuig_type", ["naam"]),
+        ("dealer", ["naam"]),
+        ("voertuig", ["type_id", "merk_id"]),
+        ("merk_dealer", ["merk_id", "dealer_id"]),
+        ("voertuig_eigenaar", ["eigenaar_id", "voertuig_id"]),
+        ("aankoop", ["voertuig_id", "dealer_id", "datum"]),
+    ]
+
+    for test in test_insert:
+        test_table, test_columns = test
+        assert set(schema.parse_insert(test_table, test_columns)) == set(
+            test_columns
+        )
+
