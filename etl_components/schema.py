@@ -185,9 +185,41 @@ class Schema:
 
         """
 
-    def parse_input(
-        self, table_name: str, columns: dict[str, str]
-    ) -> list[str]:
+    def parse_insert(self, table_name: str, columns: list[str]) -> list[str]:
+        """Parse input values for insert or retrieve query, and return columns that table and data have in common.
+
+        Checks whether table exists in the database,
+        and whether any of columns exist for that table.
+
+        Args:
+        ----
+            table_name: name of table to be inserted into
+            columns: list of columns in dataframe
+
+        Raises:
+        ------
+            SchemaError: when no columns exist for that table
+
+        Returns:
+        -------
+            list of columns that table and data have in common.
+
+        """
+        table = self._get_table(table_name)
+
+        if len(columns) == 0:
+            message = (
+                "Provided list of columns is empty, cannot insert no columns."
+            )
+            raise SchemaError(message)
+
+        if not any(col in table.columns_and_foreign_keys for col in columns):
+            message = f"None of {columns} exist in {table_name}. Table schema is:\n{table}"
+            raise SchemaError(message)
+
+        common = set(columns) & set(table.columns_and_foreign_keys)
+        return list(common)
+
         """Parse input values for insert or retrieve query, and return columns that table and data have in common.
 
         Checks whether table exists in the database,

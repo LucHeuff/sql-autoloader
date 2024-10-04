@@ -134,11 +134,12 @@ class DBConnector(ABC):
         if columns is not None:
             dataframe.rename(columns)
 
-        common_columns = self.schema.parse_input(table, dataframe.columns)
+        # TODO should I use a different data structure?
+        common_columns = self.schema.parse_insert(table, dataframe.columns)
         query = self.get_insert_query(table, common_columns)
 
         logger.debug(
-            "Inserting %s into %s using query:\n\t%s",
+            "Inserting %s into %s using query:\n%s",
             common_columns,
             table,
             query,

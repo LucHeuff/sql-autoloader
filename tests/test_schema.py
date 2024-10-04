@@ -243,3 +243,23 @@ def test_schema() -> None:
                 mapping[col] += [d["name"]]
 
     assert schema._column_table_mapping == mapping
+
+    # --- Testing parse_insert
+
+    # test if exception is raised for empty list of columns
+    with pytest.raises(SchemaError):
+        schema.parse_insert("eigenaar", [])
+    # test if exception is raised for nonexisting columns
+    with pytest.raises(SchemaError):
+        schema.parse_insert("eigenaar", ["fiets", "trein"])
+
+    for table_name in schema.graph.nodes:
+        table = schema._get_table(table_name)
+        # testing whether parse_insert returns the common columns correctly
+        if table.columns:
+            assert (
+                schema.parse_insert(table_name, table.columns) == table.columns
+            )
+        assert set(
+            schema.parse_insert(table_name, table.columns_and_foreign_keys)
+        ) == set(table.columns_and_foreign_keys)
