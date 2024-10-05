@@ -11,11 +11,14 @@ from pydantic import (
 
 from etl_components.exceptions import (
     AliasDoesNotExistError,
-    ColumnsDoNotExistError,
+    ColumnIsAmbiguousError,
+    ColumnsDoNotExistOnTableError,
     EmptyColumnListError,
     InvalidReferenceError,
     InvalidTableError,
     NoPrimaryKeyError,
+    NoSuchColumnForTableError,
+    NoSuchColumnInSchemaError,
     TableDoesNotExistError,
 )
 
@@ -148,6 +151,27 @@ class Schema:
             raise TableDoesNotExistError(message)
         return self.graph.nodes[table_name]["table"]
 
+    def _get_table_by_column(self, column_name: str) -> Table:
+        # Splitting off table prefix if it exists.
+        if "." in column_name:
+            table_name, column_name = column_name.split(".")
+            table = self._get_table(table_name)
+            if not column_name in table.columns:
+                message = f"{column_name} does not exist for {table_name}, but got '{table_name}.{column_name}'"
+                raise NoSuchColumnForTableError(message)
+            return table
+
+        if not column_name in self._column_table_mapping:
+            message = f"No column with name '{column_name}' appears anywhere in the schema."
+            raise NoSuchColumnInSchemaError(message)
+
+        tables = self._column_table_mapping[column_name]
+        if len(tables) > 1:
+            message = f"'{column_name}' is ambiguous, appears on tables {tables}.\nPlease prefix the column name with the correct table using the format <table>.<column>."
+            raise ColumnIsAmbiguousError(message)
+
+        return self._get_table(tables[0])
+
     # ---- Public methods
 
     def get_columns(self, table_name: str) -> list[str]:
@@ -222,7 +246,7 @@ class Schema:
 
         if not any(col in table.columns_and_foreign_keys for col in columns):
             message = f"None of {columns} exist in {table.name}. Table schema is:\n{table}"
-            raise ColumnsDoNotExistError(message)
+            raise ColumnsDoNotExistOnTableError(message)
 
     def parse_insert(self, table_name: str, columns: list[str]) -> list[str]:
         """Parse input values for insert or retrieve query, and return columns that table and data have in common.

@@ -35,8 +35,20 @@ class EmptyColumnListError(SchemaError):
     """Raised when an empty list of columns is passed."""
 
 
-class ColumnsDoNotExistError(SchemaError):
+class NoSuchColumnForTableError(SchemaError):
+    """Raised when a prefix is used but the column does not exist for that table."""
+
+
+class NoSuchColumnInSchemaError(SchemaError):
+    """Raised when the provided column name does not appear anywhere in the schema."""
+
+
+class ColumnsDoNotExistOnTableError(SchemaError):
     """Raised when all the columns do not exist on a Table."""
+
+
+class ColumnIsAmbiguousError(SchemaError):
+    """Raised when a column name can refer to multiple tables."""
 
 
 class NoPrimaryKeyError(SchemaError):

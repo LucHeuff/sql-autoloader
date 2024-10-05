@@ -3,11 +3,14 @@ import pytest
 
 from etl_components.exceptions import (
     AliasDoesNotExistError,
-    ColumnsDoNotExistError,
+    ColumnIsAmbiguousError,
+    ColumnsDoNotExistOnTableError,
     EmptyColumnListError,
     InvalidReferenceError,
     InvalidTableError,
     NoPrimaryKeyError,
+    NoSuchColumnForTableError,
+    NoSuchColumnInSchemaError,
     TableDoesNotExistError,
 )
 from etl_components.schema import (
@@ -231,7 +234,7 @@ def test_schema() -> None:
     for table in tables:
         assert schema._get_table(table["name"]) == Table(**table)
 
-    # --- Testing column_table_mapping
+    # --- Testing schema.column_table_mapping
 
     # first inverting the mapping from tables
     mapping = {}
@@ -244,13 +247,34 @@ def test_schema() -> None:
 
     assert schema._column_table_mapping == mapping
 
-    # --- Testing parse_insert
+    # --- Testing schema._get_table_by_column
+
+    # test if exception is raised when prefixed column does not exist for table when prefixed
+    with pytest.raises(NoSuchColumnForTableError):
+        schema._get_table_by_column("eigenaar.fiets")
+    # test if exception is raised when non-prefixed column does not exist in schema
+    with pytest.raises(NoSuchColumnInSchemaError):
+        schema._get_table_by_column("fiets")
+    # test if exception is raised when non-prefixed column is ambiguous
+    with pytest.raises(ColumnIsAmbiguousError):
+        schema._get_table_by_column("naam")
+
+    # testing happy path
+    columns_and_table_names = [
+        ("eigenaar.naam", "eigenaar"),
+        ("datum", "aankoop"),
+    ]
+
+    for column, table_name in columns_and_table_names:
+        assert schema._get_table_by_column(column).name == table_name
+
+    # --- Testing schema.parse_insert
 
     # test if exception is raised for empty list of columns
     with pytest.raises(EmptyColumnListError):
         schema.parse_insert("eigenaar", [])
     # test if exception is raised for nonexisting columns
-    with pytest.raises(ColumnsDoNotExistError):
+    with pytest.raises(ColumnsDoNotExistOnTableError):
         schema.parse_insert("eigenaar", ["fiets", "trein"])
 
     test_insert = [
@@ -271,13 +295,13 @@ def test_schema() -> None:
             test_columns
         )
 
-    # ---- Testing parse_retrieve
+    # ---- Testing schema.parse_retrieve
 
     # test if exception if raised for empty list of columns
     with pytest.raises(EmptyColumnListError):
         schema.parse_retrieve("eigenaar", "eigenaar_id", [])
     # test if exception is raised for nonexisting columns
-    with pytest.raises(ColumnsDoNotExistError):
+    with pytest.raises(ColumnsDoNotExistOnTableError):
         schema.parse_retrieve("eigenaar", "eigenaar_id", ["fiets", "trein"])
     # test if exception is raised when trying to retrieve from a table without a primary key
     with pytest.raises(NoPrimaryKeyError):
