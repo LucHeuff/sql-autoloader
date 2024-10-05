@@ -134,7 +134,6 @@ class DBConnector(ABC):
         if columns is not None:
             dataframe.rename(columns)
 
-        # TODO should I use a different data structure?
         common_columns = self.schema.parse_insert(table, dataframe.columns)
         query = self.get_insert_query(table, common_columns)
 
@@ -152,7 +151,7 @@ class DBConnector(ABC):
                 dataframe.rows(common_columns),
             )
 
-    def retrieve_ids(  # noqa ANN201
+    def retrieve_ids(
         self,
         data,  # noqa: ANN001
         *,
@@ -161,7 +160,7 @@ class DBConnector(ABC):
         columns: dict[str, str] | None = None,
         replace: bool = True,
         allow_duplication: bool = False,
-    ):
+    ) -> Any:  # noqa: ANN401
         """Retrieve ids from the database and join them to data.
 
         Args:
@@ -185,7 +184,6 @@ class DBConnector(ABC):
         if columns is not None:
             dataframe.rename(columns)
 
-        # TODO this feels like an awkward data structure
         key, common_columns = self.schema.parse_retrieve(
             table, alias, dataframe.columns
         )
