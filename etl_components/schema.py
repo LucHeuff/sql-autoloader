@@ -67,13 +67,31 @@ class Table(BaseModel):
         """Return whether the table has a primary key."""
         return bool(self.primary_key)
 
+    @property
+    def prefix_column_map(self) -> dict[str, str]:
+        """Return mapping from prefixes to columns for this table."""
+        return {
+            f"{self.name}.{col}": col for col in self.columns_and_foreign_keys
+        }
+
     def __contains__(self, column: str) -> bool:
-        """Check whether this table contains the provided column."""
-        if "." in column:
-            table, column = column.split(".")
-            if table != self.name:
-                return False
-        return column in self.columns or column in self.foreign_keys
+        """Return whether column exist for this table.
+
+        Accepts the column name as well as prefixed column name (<table>.<column>).
+
+        Args:
+        ----
+            column: name of column to check
+
+        Returns:
+        -------
+           boolean indicating if the column exists for this table.
+
+        """
+        return (
+            column in self.columns_and_foreign_keys
+            or column in self.prefix_column_map
+        )
 
     def __str__(self) -> str:
         """Return human readable representation of the table."""
@@ -176,10 +194,10 @@ class Schema:
     def _get_table_by_column(self, column_name: str) -> Table:
         # Splitting off table prefix if it exists.
         if "." in column_name:
-            table_name, column_name = column_name.split(".")
+            table_name, _ = column_name.split(".")
             table = self._get_table(table_name)
-            if not column_name in table.columns:
-                message = f"{column_name} does not exist for {table_name}, but got '{table_name}.{column_name}'"
+            if not column_name in table:
+                message = f"{column_name} does not exist for {table_name}."
                 raise NoSuchColumnForTableError(message)
             return table
 
@@ -193,6 +211,28 @@ class Schema:
             raise ColumnIsAmbiguousError(message)
 
         return self._get_table(tables[0])
+
+    def _get_table_prefix_map(
+        self, table_name: str, columns: list[str]
+    ) -> dict[str, str]:
+        """Get a dictionary mapping prefixed columns to bare column names for this table.
+
+        Args:
+        ----
+            table_name: name of table to get mapping for
+            columns: columns that might need to be remapped
+
+        Returns:
+        -------
+            mapping of prefixed columns to bare column names.
+
+        """
+        table = self._get_table(table_name)
+        return {
+            prefix: column
+            for (prefix, column) in table.prefix_column_map.items()
+            if prefix in columns
+        }
 
     # ---- Public methods
 

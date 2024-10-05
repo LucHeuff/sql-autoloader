@@ -280,6 +280,20 @@ def test_schema() -> None:
     for column, table_name in columns_and_table_names:
         assert schema._get_table_by_column(column).name == table_name
 
+    # --- Testing schema._get_table_prefix_map
+
+    prefixes_and_columns = [
+        ("eigenaar", ["eigenaar.naam"], {"eigenaar.naam": "naam"}),
+        (
+            "voertuig",
+            ["voertuig.type_id", "merk_id"],
+            {"voertuig.type_id": "type_id"},
+        ),
+    ]
+
+    for table, columns, mapping in prefixes_and_columns:
+        assert schema._get_table_prefix_map(table, columns) == mapping
+
     # --- Testing schema.parse_insert
 
     # test if exception is raised for empty list of columns
