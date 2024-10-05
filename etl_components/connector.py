@@ -7,7 +7,8 @@ from typing import Any, Iterator, Protocol, Self
 from etl_components.dataframe import DataFrame, get_dataframe
 from etl_components.schema import ReferenceDict, Schema, TableDict
 
-logger = logging.getLogger(__name__)
+# TODO check if I need logging.debug or logging.debug
+# logger = logging.getLogger(__name__)
 
 
 class Cursor(Protocol):
@@ -300,6 +301,7 @@ class DBConnector(ABC):
 
         dataframe.compare(db_rows, exact=exact)
 
+    # TODO check if this function as a whole still makes sense
     def load(
         self,
         data,  # noqa: ANN001
@@ -346,6 +348,7 @@ class DBConnector(ABC):
 
         # TODO 1 This looks horrible, I should be able to return a better datastructure
         # TODO 2 alias needs to be retrieved here as well
+        # TODO 3 also include prefix map
         (
             insert_and_retrieve,
             insert,
@@ -354,6 +357,7 @@ class DBConnector(ABC):
         logging.debug("Tables to insert and retrieve: %s", insert_and_retrieve)
         logging.debug("Tables to insert: %s", insert)
 
+        # TODO replace this by getting it from Table
         def get_column_map(table: str) -> dict[str, str] | None:
             """Translate columns prefixed with this table to their name in the schema."""
             if columns is None:
@@ -363,7 +367,7 @@ class DBConnector(ABC):
                 col: col.replace(prefix, "") for col in columns if prefix in col
             }
 
-        logger.debug("Inserting and retrieving tables...")
+        logging.debug("Inserting and retrieving tables...")
         for table in insert_and_retrieve:
             dataframe = self.insert_and_retrieve_ids(
                 dataframe,
@@ -373,11 +377,11 @@ class DBConnector(ABC):
                 allow_duplication=allow_duplication,
             )
 
-        logger.debug("Inserting tables...")
+        logging.debug("Inserting tables...")
         for table in insert:
             self.insert(dataframe, table=table, columns=get_column_map(table))
 
-        logger.debug("Comparing...")
+        logging.debug("Comparing...")
         self.compare(
             orig_dataframe, query=compare_query, where=where, exact=exact
         )
