@@ -43,6 +43,20 @@ class Table(BaseModel):
             raise InvalidTableError(message)
         return self
 
+    def common_columns(self, columns: list[str]) -> list[str]:
+        """Return a set of columns common to this table and the list of columns.
+
+        Args:
+        ----
+            columns: list of columns of interest
+
+        Returns:
+        -------
+            columns that the list and this table have in common.
+
+        """
+        return list(set(columns) & set(self.columns_and_foreign_keys))
+
     @property
     def columns_and_foreign_keys(self) -> list[str]:
         """Return both the columns and the foreign keys for this table."""
@@ -52,6 +66,14 @@ class Table(BaseModel):
     def has_primary_key(self) -> bool:
         """Return whether the table has a primary key."""
         return bool(self.primary_key)
+
+    def __contains__(self, column: str) -> bool:
+        """Check whether this table contains the provided column."""
+        if "." in column:
+            table, column = column.split(".")
+            if table != self.name:
+                return False
+        return column in self.columns or column in self.foreign_keys
 
     def __str__(self) -> str:
         """Return human readable representation of the table."""
@@ -226,8 +248,8 @@ class Schema:
 
         """
 
-    def _parse_columns(self, table: Table, columns: list[str]) -> None:
-        """Check if columns list is not empty and that columns exist in table.
+    def _parse_columns(self, table: Table, columns: list[str]) -> list[str]:
+        """Check if columns list is not empty and that columns exist in table, then return common columns.
 
         Args:
         ----
@@ -244,9 +266,11 @@ class Schema:
             message = "Provided list of columns cannot be empty"
             raise EmptyColumnListError(message)
 
-        if not any(col in table.columns_and_foreign_keys for col in columns):
+        if not any(col in table for col in columns):
             message = f"None of {columns} exist in {table.name}. Table schema is:\n{table}"
             raise ColumnsDoNotExistOnTableError(message)
+
+        return table.common_columns(columns)
 
     def parse_insert(self, table_name: str, columns: list[str]) -> list[str]:
         """Parse input values for insert or retrieve query, and return columns that table and data have in common.
@@ -266,10 +290,7 @@ class Schema:
         """
         table = self._get_table(table_name)
 
-        self._parse_columns(table, columns)
-
-        common = set(columns) & set(table.columns_and_foreign_keys)
-        return list(common)
+        return self._parse_columns(table, columns)
 
     def parse_retrieve(
         self, table_name: str, alias: str, columns: list[str]
@@ -312,10 +333,7 @@ class Schema:
             message = f"Alias '{alias}' does not appear anywhere in the schema for table {table_name}."
             raise AliasDoesNotExistError(message)
 
-        self._parse_columns(table, columns)
-
-        common = set(columns) & set(table.columns_and_foreign_keys)
-        return table.primary_key, list(common)
+        return table.primary_key, self._parse_columns(table, columns)
 
     # ---- Properties and dunder methods
 

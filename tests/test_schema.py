@@ -52,6 +52,18 @@ def test_table() -> None:
         str(full_table)
         == "Table full (\n\tid\n\thalf_id\n\tquarter_id\n\tone\n\ttwo\n\tthree\n)"
     )
+    # testing __contains__
+    assert "one" in full_table
+    assert "quarter_id" in full_table
+    assert "full.one" in full_table
+    assert "fiets" not in full_table
+    assert "trein.fiets" not in full_table
+    # testing Table.common_columns
+    assert set(full_table.common_columns(["half_id", "one"])) == {
+        "half_id",
+        "one",
+    }
+    assert set(no_foreign_table.common_columns(["half_id", "one"])) == {"one"}
 
     assert no_foreign_table.has_primary_key == True
     assert (
