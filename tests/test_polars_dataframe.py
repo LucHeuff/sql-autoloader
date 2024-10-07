@@ -7,7 +7,6 @@ from etl_components.exceptions import (
     CompareMissingRowsError,
     CompareNoExactMatchError,
     MatchDatatypesError,
-    MissingKeysAfterMergeError,
 )
 from etl_components.polars_dataframe import PolarsDataFrame
 
@@ -28,6 +27,8 @@ def test_data() -> None:
 def test_rename() -> None:
     """Test PolarsDataFrame.rename() correctly renames the data."""
     polars_df = PolarsDataFrame(pl.DataFrame({"a": [1], "b": [1], "c": [1]}))
+    polars_df.rename({})
+    assert polars_df.columns == ["a", "b", "c"]
     polars_df.rename({"a": "A", "b": "B", "c": "C"})
     assert polars_df.columns == ["A", "B", "C"]
 

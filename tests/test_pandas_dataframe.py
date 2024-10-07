@@ -7,7 +7,6 @@ from etl_components.exceptions import (
     CompareMissingRowsError,
     CompareNoExactMatchError,
     MatchDatatypesError,
-    MissingKeysAfterMergeError,
 )
 from etl_components.pandas_dataframe import (
     PandasDataFrame,
@@ -30,6 +29,8 @@ def test_data() -> None:
 def test_rename() -> None:
     """Test PandasDataFrame.rename() correctly renames the data."""
     pandas_df = PandasDataFrame(pd.DataFrame({"a": [1], "b": [1], "c": [1]}))
+    pandas_df.rename({})
+    assert pandas_df.columns == ["a", "b", "c"]
     pandas_df.rename({"a": "A", "b": "B", "c": "C"})
     assert pandas_df.columns == ["A", "B", "C"]
 
