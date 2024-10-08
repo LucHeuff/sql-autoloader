@@ -191,7 +191,24 @@ class Schema:
             raise TableDoesNotExistError(message)
         return self.graph.nodes[table_name]["table"]
 
-    def _get_table_by_column(self, column_name: str) -> Table:
+    def _get_table_name_by_column(self, column_name: str) -> str:
+        """Retrieve the table name beloning to this column.
+
+        Args:
+        ----
+            column_name: bare column name, or prefixed with desired table if ambiguous
+
+        Returns:
+        -------
+           name of the table that belongs to this column.
+
+        Raises:
+        ------
+            NoSuchColumnForTableError: if the prefixed table doesn't have this column.
+            ColumnIsAmbiguousError: if the column name appears on multiple columns.
+            NoSuchColumnInSchemaError: if the column name does not appear in the schema at all.
+
+        """
         # Splitting off table prefix if it exists.
         if "." in column_name:
             table_name, _ = column_name.split(".")
@@ -199,7 +216,7 @@ class Schema:
             if not column_name in table:
                 message = f"{column_name} does not exist for {table_name}."
                 raise NoSuchColumnForTableError(message)
-            return table
+            return table.name
 
         if not column_name in self._column_table_mapping:
             message = f"No column with name '{column_name}' appears anywhere in the schema."
@@ -210,7 +227,7 @@ class Schema:
             message = f"'{column_name}' is ambiguous, appears on tables {tables}.\nPlease prefix the column name with the correct table using the format <table>.<column>."
             raise ColumnIsAmbiguousError(message)
 
-        return self._get_table(tables[0])
+        return tables[0]
 
     def _get_table_prefix_map(
         self, table_name: str, columns: list[str]

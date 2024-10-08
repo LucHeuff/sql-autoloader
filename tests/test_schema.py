@@ -263,13 +263,13 @@ def test_schema() -> None:
 
     # test if exception is raised when prefixed column does not exist for table when prefixed
     with pytest.raises(NoSuchColumnForTableError):
-        schema._get_table_by_column("eigenaar.fiets")
+        schema._get_table_name_by_column("eigenaar.fiets")
     # test if exception is raised when non-prefixed column does not exist in schema
     with pytest.raises(NoSuchColumnInSchemaError):
-        schema._get_table_by_column("fiets")
+        schema._get_table_name_by_column("fiets")
     # test if exception is raised when non-prefixed column is ambiguous
     with pytest.raises(ColumnIsAmbiguousError):
-        schema._get_table_by_column("naam")
+        schema._get_table_name_by_column("naam")
 
     # testing happy path
     columns_and_table_names = [
@@ -278,7 +278,7 @@ def test_schema() -> None:
     ]
 
     for column, table_name in columns_and_table_names:
-        assert schema._get_table_by_column(column).name == table_name
+        assert schema._get_table_name_by_column(column) == table_name
 
     # --- Testing schema._get_table_prefix_map
 
