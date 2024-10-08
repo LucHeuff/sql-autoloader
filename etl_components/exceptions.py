@@ -59,6 +59,10 @@ class AliasDoesNotExistError(SchemaError):
     """Raised when the provided alias does not exist."""
 
 
+class AmbiguousAliasesError(SchemaError):
+    """Raised when multiple aliases exist and it is unclear which should be used."""
+
+
 class InvalidTableError(ETLComponentsError):
     """Raised when Table validation fails."""
 

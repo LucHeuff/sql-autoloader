@@ -11,6 +11,7 @@ from pydantic import (
 
 from etl_components.exceptions import (
     AliasDoesNotExistError,
+    AmbiguousAliasesError,
     ColumnIsAmbiguousError,
     ColumnsDoNotExistOnTableError,
     EmptyColumnListError,
@@ -145,6 +146,46 @@ class ReferenceDict(TypedDict):
 
 
 GetSchemaFunction = Callable[[], tuple[list[TableDict], list[ReferenceDict]]]
+
+
+class InsertAndRetrieveDict(TypedDict):
+    """Type indicator for params used in connector.insert_and_retrieve_ids()."""
+
+    table: str
+    alias: str
+    columns: dict[str, str] | None
+
+
+class InsertDict(TypedDict):
+    """Type indicator for params used in connector.insert()."""
+
+    table: str
+    columns: dict[str, str] | None
+
+
+class LoadInstructions(BaseModel):
+    """Model to neatly encapsulate instructions for connector.load()."""
+
+    insert_and_retrieve: list[InsertAndRetrieveDict]
+    insert: list[InsertDict]
+
+    @property
+    def insert_and_retrieve_tables(self) -> list[str]:
+        """Get a list of tables being inserted and retrieved."""
+        return [op["table"] for op in self.insert_and_retrieve]
+
+    @property
+    def insert_tables(self) -> list[str]:
+        """Get a list of tables being inserted."""
+        return [op["table"] for op in self.insert]
+
+    def __repr__(self) -> str:
+        """Return more readable repr for object."""
+        insert_and_retrieve_repr = "\n".join(
+            repr(d) for d in self.insert_and_retrieve
+        )
+        insert_repr = "\n".join(repr(d) for d in self.insert)
+        return f"LoadInstructions(\ninsert_and_retrieve:\n{insert_and_retrieve_repr}\ninsert:\n{insert_repr})"
 
 
 class Schema:
@@ -286,10 +327,7 @@ class Schema:
 
         """
 
-    # TODO return better datastructure
-    def get_insert_and_retrieve_tables(
-        self, columns: list[str]
-    ) -> tuple[list[str], list[str]]:
+    def get_load_instructions(self, columns: list[str]) -> LoadInstructions:
         """Get lists of tables that need to be inserted and retrieved, or only inserted, based on columns.
 
         Args:
@@ -304,6 +342,70 @@ class Schema:
                 insert: tables that only need to be inserted
 
         """
+        # Find all tables that can be inserted using columns
+
+        tables = list(
+            unique(self._get_table_name_by_column(col) for col in columns)
+        )
+
+        for node in nx.topological_sort(self.graph):
+            if node not in tables and all(
+                predecessor in tables
+                for predecessor in self.graph.predecessors(node)
+            ):
+                tables.append(node)
+
+        # Find which order the tables should be inserted
+        subgraph = nx.subgraph(self.graph, tables)
+        order = nx.topological_sort(subgraph)
+
+        isolated = nx.isolates(subgraph)  # list of nodes with no neighbours
+
+        insert_and_retrieve = []
+        insert = []
+
+        for table in order:
+            # Find the prefix_column_map to rename columns
+            prefix_map = self._get_table_prefix_map(table, columns)
+            params = {"table": table, "columns": prefix_map}
+
+            # insertion and retrieval only needs to be performed if the table has a primary key
+            # and is referred to in the current subgraph
+            if self._get_table(table).has_primary_key and table not in isolated:
+                # Find the alias with which should be retrieved
+                # -> Look for successors of this node in the subgraph
+                successors = self.graph.successors(table)
+
+                # Two differen list comprehensions because both the edge data and the dictionaries are theoretically allowed to be empty
+                # Could do this in one but that would make it even less readable
+                edge_attributes = [
+                    attr
+                    for child in successors
+                    if (attr := self.graph.get_edge_data(table, child))
+                    is not None
+                ]
+
+                # Find how the reference refers to the id, if a reference was found
+                aliases = [
+                    ref.from_key
+                    for attr in edge_attributes
+                    if (ref := attr.get("reference", None)) is not None
+                ]
+
+                # It is possible that tables use different aliases. Currently, this code cannot handle that situation
+                # so raises an exception
+                if len(list(unique(aliases))) > 1:
+                    message = f"Table id {table} is referred to by multiple aliases: {aliases}, which alias to use is ambiguous."
+                    raise AmbiguousAliasesError(message)
+                params.update(alias=aliases[0])
+
+                insert_and_retrieve.append(params)
+            else:
+                insert.append(params)
+
+        return LoadInstructions(
+            insert_and_retrieve=insert_and_retrieve, insert=insert
+        )
 
     def _parse_columns(self, table: Table, columns: list[str]) -> list[str]:
         """Check if columns list is not empty and that columns exist in table, then return common columns.

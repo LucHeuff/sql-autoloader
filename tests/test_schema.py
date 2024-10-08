@@ -352,3 +352,41 @@ def test_schema() -> None:
         )
         assert test_key == out_key
         assert set(out_columns) == set(test_columns)
+
+    # ---- Testing schema.get_load_instructions
+    instruction_columns = [
+        "eigenaar.naam",
+        "voertuig_type.naam",
+        "merk.naam",
+        "dealer.naam",
+        "datum",
+    ]
+
+    insert_and_retrieve_dicts = [
+        {
+            "table": "eigenaar",
+            "alias": "eigenaar_id",
+            "columns": {"eigenaar.naam": "naam"},
+        },
+        {"table": "merk", "alias": "merk_id", "columns": {"merk.naam": "naam"}},
+        {
+            "table": "voertuig_type",
+            "alias": "type_id",
+            "columns": {"voertuig_type.naam": "naam"},
+        },
+        {
+            "table": "dealer",
+            "alias": "dealer_id",
+            "columns": {"dealer.naam": "naam"},
+        },
+        {"table": "voertuig", "alias": "voertuig_id", "columns": {}},
+    ]
+    insert_dicts = [
+        {"table": "merk_dealer", "columns": {}},
+        {"table": "voertuig_eigenaar", "columns": {}},
+        {"table": "aankoop", "columns": {}},
+    ]
+
+    load_instructions = schema.get_load_instructions(instruction_columns)
+    assert load_instructions.insert_and_retrieve == insert_and_retrieve_dicts
+    assert load_instructions.insert == insert_dicts

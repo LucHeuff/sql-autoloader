@@ -138,7 +138,7 @@ class DBConnector(ABC):
         common_columns = self.schema.parse_insert(table, dataframe.columns)
         query = self.get_insert_query(table, common_columns)
 
-        logger.debug(
+        logging.debug(
             "Inserting %s into %s using query:\n%s",
             common_columns,
             table,
@@ -190,7 +190,7 @@ class DBConnector(ABC):
         )
 
         query = self.get_retrieve_query(table, key, alias, common_columns)
-        logger.debug(
+        logging.debug(
             "Retrieving %s from %s using query:\n%s",
             common_columns,
             table,
@@ -288,7 +288,7 @@ class DBConnector(ABC):
                 dataframe.columns, where=where
             )
 
-        logger.debug("Comparing using query:\n%s", query)
+        logging.debug("Comparing using query:\n%s", query)
 
         with self.cursor() as cursor:
             cursor.execute(query)
@@ -345,41 +345,26 @@ class DBConnector(ABC):
         orig_dataframe = copy(dataframe)
 
         logging.debug("Loading data using columns %s", dataframe.columns)
+        load_instructions = self.schema.get_load_instructions(dataframe.columns)
 
-        # TODO 1 This looks horrible, I should be able to return a better datastructure
-        # TODO 2 alias needs to be retrieved here as well
-        # TODO 3 also include prefix map
-        (
-            insert_and_retrieve,
-            insert,
-        ) = self.schema.get_insert_and_retrieve_tables(dataframe.columns)
-
-        logging.debug("Tables to insert and retrieve: %s", insert_and_retrieve)
-        logging.debug("Tables to insert: %s", insert)
-
-        # TODO replace this by getting it from Table
-        def get_column_map(table: str) -> dict[str, str] | None:
-            """Translate columns prefixed with this table to their name in the schema."""
-            if columns is None:
-                return None
-            prefix = f"{table}."
-            return {
-                col: col.replace(prefix, "") for col in columns if prefix in col
-            }
+        logging.debug(
+            "Tables to insert and retrieve: %s",
+            load_instructions.insert_and_retrieve_tables,
+        )
+        logging.debug("Tables to insert: %s", load_instructions.insert_tables)
 
         logging.debug("Inserting and retrieving tables...")
-        for table in insert_and_retrieve:
+        for params in load_instructions.insert_and_retrieve:
             dataframe = self.insert_and_retrieve_ids(
                 dataframe,
-                columns=get_column_map(table),
-                table=table,
+                **params,
                 replace=replace,
                 allow_duplication=allow_duplication,
             )
 
         logging.debug("Inserting tables...")
-        for table in insert:
-            self.insert(dataframe, table=table, columns=get_column_map(table))
+        for params in load_instructions.insert:
+            self.insert(dataframe, **params)
 
         logging.debug("Comparing...")
         self.compare(
