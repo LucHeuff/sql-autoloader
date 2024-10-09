@@ -257,8 +257,8 @@ class DBConnector(ABC):
     def compare(
         self,
         data,  # noqa: ANN001
-        query: str,
         *,
+        query: str | None = None,
         columns: dict[str, str] | None = None,
         where: str | None = None,
         exact: bool = True,
@@ -282,7 +282,6 @@ class DBConnector(ABC):
         if columns is not None:
             dataframe.rename(columns)
 
-        # TODO query weer optioneel maken als ik get_compare_query aan de praat heb
         if query is None:
             query = self.schema.get_compare_query(
                 dataframe.columns, where=where
@@ -301,7 +300,6 @@ class DBConnector(ABC):
 
         dataframe.compare(db_rows, exact=exact)
 
-    # TODO check if this function as a whole still makes sense
     def load(
         self,
         data,  # noqa: ANN001

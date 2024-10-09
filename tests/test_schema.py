@@ -1,4 +1,6 @@
 # ruff: noqa: SLF001
+from textwrap import dedent
+
 import pytest
 
 from etl_components.exceptions import (
@@ -47,36 +49,52 @@ def test_table() -> None:
     only_columns_table = Table(**only_columns)
     only_foreign_table = Table(**only_foreign)
 
-    assert full_table.has_primary_key == True
-    assert (
-        str(full_table)
-        == "Table full (\n\tid\n\thalf_id\n\tquarter_id\n\tone\n\ttwo\n\tthree\n)"
-    )
-    # testing __contains__
+    # testing Table.__contains__
     assert "one" in full_table
     assert "quarter_id" in full_table
     assert "full.one" in full_table
     assert "fiets" not in full_table
     assert "trein.fiets" not in full_table
-    # testing Table.common_columns
-    assert set(full_table.common_columns(["half_id", "one"])) == {
+
+    # testing Table.get_common_columns
+    assert set(full_table.get_common_columns(["half_id", "one"])) == {
         "half_id",
         "one",
     }
-    assert set(no_foreign_table.common_columns(["half_id", "one"])) == {"one"}
+    assert set(no_foreign_table.get_common_columns(["half_id", "one"])) == {
+        "one"
+    }
 
+    # testing Table.get_prefixed_columns
+    assert full_table.get_prefixed_columns(["one", "two", "three"]) == [
+        "full.one",
+        "full.two",
+        "full.three",
+    ]
+    assert full_table.get_prefixed_columns(
+        ["full.one", "full.two", "full.four", "five", "no_foreign.one"]
+    ) == ["full.one", "full.two"]
+
+    # testing Table.has_primary_key
+    assert full_table.has_primary_key == True
     assert no_foreign_table.has_primary_key == True
+    assert only_columns_table.has_primary_key == False
+    assert only_foreign_table.has_primary_key == False
+
+    # Testing Table.__str__
+    assert (
+        str(full_table)
+        == "Table full (\n\tid\n\thalf_id\n\tquarter_id\n\tone\n\ttwo\n\tthree\n)"
+    )
     assert (
         str(no_foreign_table)
         == "Table no_foreign (\n\tkey\n\tone\n\ttwo\n\tthree\n)"
     )
 
-    assert only_columns_table.has_primary_key == False
     assert str(only_columns_table) == str(
         "Table only_columns (\n\tone\n\ttwo\n\tthree\n)"
     )
 
-    assert only_foreign_table.has_primary_key == False
     assert (
         str(only_foreign_table)
         == "Table only_foreign (\n\thalf_id\n\tquarter_id\n)"
@@ -390,3 +408,15 @@ def test_schema() -> None:
     load_instructions = schema.get_load_instructions(instruction_columns)
     assert load_instructions.insert_and_retrieve == insert_and_retrieve_dicts
     assert load_instructions.insert == insert_dicts
+
+    # ---- Testing schema.get_compare_query
+    columns = [
+        "voertuig_type.naam",
+        "eigenaar.naam",
+        "merk.naam",
+        "dealer.naam",
+        "datum",
+    ]
+
+    compare_query = """SELECT\nvoertuig_type.naam,\neigenaar.naam,\nmerk.naam,\ndealer.naam,\ndatum\nFROM eigenaar\nLEFT JOIN voertuig_eigenaar ON voertuig_eigenaar.eigenaar_id = eigenaar.id\nLEFT JOIN voertuig ON voertuig_eigenaar.voertuig_id = voertuig.id\nLEFT JOIN voertuig_type ON voertuig.type_id = voertuig_type.id\nLEFT JOIN merk ON voertuig.merk_id = merk.id\nLEFT JOIN merk_dealer ON merk_dealer.merk_id = merk.id\nLEFT JOIN dealer ON merk_dealer.dealer_id = dealer.id\nLEFT JOIN aankoop ON aankoop.dealer_id = dealer.id"""
+    assert schema.get_compare_query(columns) == compare_query

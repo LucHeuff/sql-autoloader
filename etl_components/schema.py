@@ -2,7 +2,13 @@ from functools import cached_property
 from typing import Annotated, Callable, Self, TypedDict
 
 import networkx as nx
-from more_itertools import unique
+from more_itertools import (
+    collapse,
+    unique,
+    unique_everseen,
+    unique_justseen,
+    windowed,
+)
 from pydantic import (
     BaseModel,
     StringConstraints,
@@ -17,6 +23,7 @@ from etl_components.exceptions import (
     EmptyColumnListError,
     InvalidReferenceError,
     InvalidTableError,
+    IsolatedTablesError,
     NoPrimaryKeyError,
     NoSuchColumnForTableError,
     NoSuchColumnInSchemaError,
@@ -44,21 +51,46 @@ class Table(BaseModel):
             raise InvalidTableError(message)
         return self
 
-    def common_columns(self, columns: list[str]) -> list[str]:
+    def get_common_columns(self, columns: list[str]) -> list[str]:
         """Return a set of columns common to this table and the list of columns.
 
         Args:
         ----
-            columns: list of columns of interest
+                    columns: list of columns of interest
 
         Returns:
         -------
-            columns that the list and this table have in common.
+                    columns that the list and this table have in common.
 
         """
         return list(set(columns) & set(self.columns_and_foreign_keys))
 
-    @property
+    def get_prefixed_columns(self, columns: list[str]) -> list[str]:
+        """Get prefixed version of each column that apears in this table.
+
+        Args:
+        ----
+            columns: list of columns that may appear in this table
+
+        Returns:
+        -------
+           list of prefixed columns that appear in this table.
+
+        """
+        column_to_prefix_map = {
+            v: k for (k, v) in self.prefix_column_map.items()
+        }
+        prefix_columns = []
+        for col in columns:
+            if not col in self:
+                continue
+            if col in self.prefix_column_map:
+                prefix_columns.append(col)
+            else:
+                prefix_columns.append(column_to_prefix_map[col])
+        return prefix_columns
+
+    @cached_property
     def columns_and_foreign_keys(self) -> list[str]:
         """Return both the columns and the foreign keys for this table."""
         return self.columns + self.foreign_keys
@@ -68,7 +100,7 @@ class Table(BaseModel):
         """Return whether the table has a primary key."""
         return bool(self.primary_key)
 
-    @property
+    @cached_property
     def prefix_column_map(self) -> dict[str, str]:
         """Return mapping from prefixes to columns for this table."""
         return {
@@ -292,6 +324,57 @@ class Schema:
             if prefix in columns
         }
 
+    def _get_relevant_tables(self, columns: list[str]) -> list[str]:
+        """Get a list of tables that are relevant to this set of columns.
+
+        Searches through the graph for tables and their successors that can be loaded.
+
+        Args:
+        ----
+            columns: list of columns to be loaded.
+
+        Returns:
+        -------
+           list of tables to load.
+
+        """
+        tables = list(
+            unique(self._get_table_name_by_column(col) for col in columns)
+        )
+
+        for node in nx.topological_sort(self.graph):
+            if node not in tables and all(
+                predecessor in tables
+                for predecessor in self.graph.predecessors(node)
+            ):
+                tables.append(node)
+
+        return tables
+
+    def _parse_columns(self, table: Table, columns: list[str]) -> list[str]:
+        """Check if columns list is not empty and that columns exist in table, then return common columns.
+
+        Args:
+        ----
+            table: under consideration
+            columns: list of columns that are to be inserted or retrieved with
+
+        Raises:
+        ------
+            EmptyColumnListError: when list is empty
+            ColumnsDoNotExistError: when none of the columns exist in the table.
+
+        """
+        if len(columns) == 0:
+            message = "Provided list of columns cannot be empty"
+            raise EmptyColumnListError(message)
+
+        if not any(col in table for col in columns):
+            message = f"None of {columns} exist in {table.name}. Table schema is:\n{table}"
+            raise ColumnsDoNotExistOnTableError(message)
+
+        return table.get_common_columns(columns)
+
     # ---- Public methods
 
     def get_columns(self, table_name: str) -> list[str]:
@@ -308,6 +391,7 @@ class Schema:
         """
         return self._get_table(table_name).columns
 
+    # TODO test?
     def get_compare_query(
         self,
         columns: list[str],
@@ -326,6 +410,111 @@ class Schema:
             valid compare query
 
         """
+        # parsing where clause
+        where_clause = f"\n{where}" if where is not None else ""
+
+        # Find the tables belonging to these columns
+        tables = self._get_relevant_tables(columns)
+        # retrieve the subgraph for this set of tables and the topological ordering
+        subgraph = nx.subgraph(self.graph, tables)
+
+        # I cannot deal with comparing when isolated tables are involved, so throwing back to the user.
+        if nx.number_of_isolates(subgraph) > 0:
+            isolated = [
+                nx.is_isolate(subgraph, node) for node in subgraph.nodes
+            ]
+            message = f"Automatic compare query generation cannot handle any isolated tables, but {isolated} do not link to any other table. Either provide a compare query yourself, or make sure the data you are loading all relate to one another."
+            raise IsolatedTablesError(message)
+
+        # --- Building the SELECT clause
+        select_clause = f"SELECT\n{',\n'.join(columns)}"
+
+        # --- Building the JOIN clause
+        # I want to be able to ignore the edge direction, so I also need an undirected graph.
+        undirected = subgraph.to_undirected()
+
+        # Finding start and end nodes -> using topological generations to make sure I start
+        # at a node that is only referenced, and end at a node that only references
+        generations = list(nx.topological_generations(subgraph))
+        # finding a start node with the smallest out degree (least outward paths)
+        start_node = sorted(
+            generations[0], key=lambda node: subgraph.out_degree(node)
+        )[0]
+        # finding an end node that is in the last generation and furthest removed from the start node.
+        # This makes the step of iteratively finding a path more efficient.
+        end_node = sorted(
+            generations[-1],
+            key=lambda node: nx.dijkstra_path_length(
+                undirected, start_node, node
+            ),
+            reverse=True,
+        )[0]
+        # finding the longest path between start and end nodes
+        path: list[str] = sorted(
+            nx.all_simple_paths(undirected, start_node, end_node),
+            key=len,
+            reverse=True,
+        )[0]
+        assert len(path) > 0, "only found empty base path."
+
+        # There is no guarantee that all tables have been visited by the path.
+        # The missing tables will be added to the path iteratively,
+        # by splicing them in the path as a loop, which makes sure that the transistions
+        # are still valid.
+        for table in tables:
+            # Checking if the table was not already added in a previous loop iteration
+            if table not in path:
+                # this results in a dictionary with the path from table to all other tables
+                table_paths = nx.shortest_path(undirected, table)
+                # I'm not interested in a path from table to itself, so popping that out
+                table_paths.pop(table)
+                assert len(table_paths) > 0, "No valid node-paths found."
+                # fetching the target table for the shortest path in which the most missing tables appear.
+                target = sorted(
+                    table_paths,
+                    key=lambda t: sum(
+                        node not in path for node in table_paths[t]
+                    ),
+                    reverse=True,
+                )[0]
+                # finding where in the path this target (first) appears. Moving one to the left so the new path being added appears after the target.
+                index = path.index(target) + 1
+                # we want to walk along the edges to the missing table, and back to the target table in a loop
+                # this makes sure that the edges are all still valid.
+                # nx.shortest_path results in paths from table to target, so need to reverse that first
+                loop = list(reversed(table_paths[target])) + table_paths[target]
+                # splicing the loop into the path
+                path[index:index] = loop
+                # removing consecutive duplicate nodes we introduced by adding the loop
+                path = list(unique_justseen(path))
+
+        # making sure the loop above resulted in a valid path
+        assert nx.is_path(
+            undirected, path
+        ), "Adding missing tables resulted in an unvalid path."
+
+        # retrieving references based on the path, and removing duplicates
+        references = list(
+            unique_everseen(
+                undirected.get_edge_data(u, v)["reference"]
+                for (u, v) in windowed(path, 2)
+            )
+        )
+        # removing duplicate tables from path
+        join_tables = list(unique_everseen(path))
+        # join_tables should be one longer than references
+        assert (
+            len(join_tables) == len(references) + 1
+        ), "join_tables not one longer than references."
+
+        # constructing the join clause
+        join_lines = [
+            f"LEFT JOIN {table} {ref}"
+            for (table, ref) in zip(join_tables[1:], references)
+        ]
+        join_clause = f"\nFROM {join_tables[0]}\n{'\n'.join(join_lines)}"
+
+        return select_clause + join_clause + where_clause
 
     def get_load_instructions(self, columns: list[str]) -> LoadInstructions:
         """Get lists of tables that need to be inserted and retrieved, or only inserted, based on columns.
@@ -343,17 +532,7 @@ class Schema:
 
         """
         # Find all tables that can be inserted using columns
-
-        tables = list(
-            unique(self._get_table_name_by_column(col) for col in columns)
-        )
-
-        for node in nx.topological_sort(self.graph):
-            if node not in tables and all(
-                predecessor in tables
-                for predecessor in self.graph.predecessors(node)
-            ):
-                tables.append(node)
+        tables = self._get_relevant_tables(columns)
 
         # Find which order the tables should be inserted
         subgraph = nx.subgraph(self.graph, tables)
@@ -406,30 +585,6 @@ class Schema:
         return LoadInstructions(
             insert_and_retrieve=insert_and_retrieve, insert=insert
         )
-
-    def _parse_columns(self, table: Table, columns: list[str]) -> list[str]:
-        """Check if columns list is not empty and that columns exist in table, then return common columns.
-
-        Args:
-        ----
-            table: under consideration
-            columns: list of columns that are to be inserted or retrieved with
-
-        Raises:
-        ------
-            EmptyColumnListError: when list is empty
-            ColumnsDoNotExistError: when none of the columns exist in the table.
-
-        """
-        if len(columns) == 0:
-            message = "Provided list of columns cannot be empty"
-            raise EmptyColumnListError(message)
-
-        if not any(col in table for col in columns):
-            message = f"None of {columns} exist in {table.name}. Table schema is:\n{table}"
-            raise ColumnsDoNotExistOnTableError(message)
-
-        return table.common_columns(columns)
 
     def parse_insert(self, table_name: str, columns: list[str]) -> list[str]:
         """Parse input values for insert or retrieve query, and return columns that table and data have in common.

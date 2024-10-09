@@ -63,6 +63,10 @@ class AmbiguousAliasesError(SchemaError):
     """Raised when multiple aliases exist and it is unclear which should be used."""
 
 
+class IsolatedTablesError(SchemaError):
+    """Raised when compare query generation encounters isolated tables."""
+
+
 class InvalidTableError(ETLComponentsError):
     """Raised when Table validation fails."""
 
