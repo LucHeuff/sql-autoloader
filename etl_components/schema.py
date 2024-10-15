@@ -4,6 +4,7 @@ from typing import Annotated, Callable, Self, TypedDict
 import networkx as nx
 from more_itertools import (
     collapse,
+    flatten,
     unique,
     unique_everseen,
     unique_justseen,
@@ -65,7 +66,8 @@ class Table(BaseModel):
         """
         return list(set(columns) & set(self.columns_and_foreign_keys))
 
-    def get_prefixed_columns(self, columns: list[str]) -> list[str]:
+    # TODO use this in
+    def get_prefixed_columns(self, columns: list[str]) -> list[tuple[str, str]]:
         """Get prefixed version of each column that apears in this table.
 
         Args:
@@ -74,7 +76,7 @@ class Table(BaseModel):
 
         Returns:
         -------
-           list of prefixed columns that appear in this table.
+           list of tuples of prefixed columns in format (prefixed, original)
 
         """
         column_to_prefix_map = {
@@ -85,9 +87,9 @@ class Table(BaseModel):
             if not col in self:
                 continue
             if col in self.prefix_column_map:
-                prefix_columns.append(col)
+                prefix_columns.append((col, col))
             else:
-                prefix_columns.append(column_to_prefix_map[col])
+                prefix_columns.append((column_to_prefix_map[col], col))
         return prefix_columns
 
     @cached_property
@@ -391,7 +393,6 @@ class Schema:
         """
         return self._get_table(table_name).columns
 
-    # TODO test?
     def get_compare_query(
         self,
         columns: list[str],
@@ -427,7 +428,23 @@ class Schema:
             raise IsolatedTablesError(message)
 
         # --- Building the SELECT clause
-        select_clause = f"SELECT\n{',\n'.join(columns)}"
+        # TODO the select clause should always use prefixed tables and retrieve using an alias
+        # e.g <table>.<column> as <alias>
+        select_columns = collapse(
+            [
+                pair
+                for table in tables
+                for pair in self._get_table(table).get_prefixed_columns(columns)
+            ],
+            base_type=tuple,
+        )
+        select_aliases = [
+            f"{prefixed} as '{original}'"
+            for (prefixed, original) in select_columns
+        ]
+
+        # TODO aliases toevoegen voor namen zoals ze in data gebeuren
+        select_clause = f"SELECT\n{',\n'.join(select_aliases)}"
 
         # --- Building the JOIN clause
         # I want to be able to ignore the edge direction, so I also need an undirected graph.
@@ -465,9 +482,13 @@ class Schema:
             # Checking if the table was not already added in a previous loop iteration
             if table not in path:
                 # this results in a dictionary with the path from table to all other tables
-                table_paths = nx.shortest_path(undirected, table)
-                # I'm not interested in a path from table to itself, so popping that out
-                table_paths.pop(table)
+                table_paths = {
+                    target: _path
+                    for (target, _path) in nx.shortest_path(
+                        undirected, table
+                    ).items()
+                    if target in path
+                }
                 assert len(table_paths) > 0, "No valid node-paths found."
                 # fetching the target table for the shortest path in which the most missing tables appear.
                 target = sorted(
