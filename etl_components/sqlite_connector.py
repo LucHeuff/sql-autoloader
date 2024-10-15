@@ -134,6 +134,8 @@ def _fetch_schema(
 class SQLiteConnector(DBConnector):
     """Connector for SQLite databases."""
 
+    cursor: sqlite3.Cursor
+
     def __init__(
         self, credentials: str, *, allow_custom_dtypes: bool = False
     ) -> None:
@@ -152,6 +154,7 @@ class SQLiteConnector(DBConnector):
         self.credentials = credentials
         self.allow_custom_dtypes = allow_custom_dtypes
 
+    # TODO for some reason the whole thing seems to execute but nothing is committed on __exit__?
     def __enter__(self) -> Self:
         """Enter context manager for SQLiteConnector by opening a connection.
 
@@ -170,31 +173,20 @@ class SQLiteConnector(DBConnector):
         )
         self.connection.row_factory = _dict_row
         self.connection.autocommit = False
+        self.cursor = self.connection.cursor()
         self.schema = self.get_schema()
         return self
 
-    def __exit__(self, *exception: object) -> None:
+    def __exit__(
+        self, exception: object, value: object, traceback: object
+    ) -> None:
         """Exit context manager by closing connection."""
-        self.connection.close()
-
-    @contextmanager
-    def cursor(self) -> Iterator[sqlite3.Cursor]:
-        """Create a new cursor to the database.
-
-        Yields
-        ------
-           sqlite3.Cursor
-
-        """
-        cursor = self.connection.cursor()
-        try:
-            yield cursor
-        except:
+        if exception:
             self.connection.rollback()
-            raise  # this makes sure the exception ir reraised
-        finally:
+        else:
             self.connection.commit()
-            cursor.close()
+        self.cursor.close()
+        self.connection.close()
 
     # ---- query generation methods
 
@@ -234,5 +226,4 @@ class SQLiteConnector(DBConnector):
 
     def fetch_schema(self) -> tuple[list[TableDict], list[ReferenceDict]]:
         """Retrieve schema from the database."""
-        with self.cursor() as cursor:
-            return _fetch_schema(cursor)
+        return _fetch_schema(self.cursor)

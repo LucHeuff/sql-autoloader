@@ -1,14 +1,10 @@
 import logging
 from abc import ABC, abstractmethod
-from contextlib import contextmanager
 from copy import copy
-from typing import Any, Iterator, Protocol, Self
+from typing import Any, Protocol, Self
 
 from etl_components.dataframe import DataFrame, get_dataframe
 from etl_components.schema import ReferenceDict, Schema, TableDict
-
-# TODO check if I need logging.debug or logging.debug
-# logger = logging.getLogger(__name__)
 
 
 class Cursor(Protocol):
@@ -26,12 +22,16 @@ class Cursor(Protocol):
         """Return results from query."""
         ...
 
+    def close(self) -> None:
+        """Close the cursor."""
+
 
 class DBConnector(ABC):
     """Abstract base class for connector with a database."""
 
     credentials: str
     schema: Schema
+    cursor: Cursor
 
     # ---- Context managers to connect conveniently to the database
 
@@ -43,12 +43,6 @@ class DBConnector(ABC):
     @abstractmethod
     def __exit__(self, *exception: object) -> None:
         """Exit DBConnector context manager."""
-
-    @abstractmethod
-    @contextmanager
-    def cursor(self) -> Iterator[Cursor]:
-        """Context manager for cursor on connection."""
-        ...
 
     # ---- Methods related to generating queries
 
@@ -146,11 +140,10 @@ class DBConnector(ABC):
         )
 
         # Executing query
-        with self.cursor() as cursor:
-            cursor.executemany(
-                query,
-                dataframe.rows(common_columns),
-            )
+        self.cursor.executemany(query, dataframe.rows(common_columns))
+
+        if columns is not None:
+            dataframe.undo_rename(columns)
 
     def retrieve_ids(
         self,
@@ -197,9 +190,8 @@ class DBConnector(ABC):
             query,
         )
         # Executing query
-        with self.cursor() as cursor:
-            cursor.execute(query)
-            db_fetch = cursor.fetchall()
+        self.cursor.execute(query)
+        db_fetch = self.cursor.fetchall()
 
         dataframe.merge_ids(db_fetch, allow_duplication=allow_duplication)
 
@@ -208,8 +200,7 @@ class DBConnector(ABC):
             dataframe.drop(self.schema.get_columns(table))
         elif not replace and columns is not None:
             # making sure to reverse the naming of columns if they are not replaced
-            reverse_columns = {v: k for (k, v) in columns.items()}
-            dataframe.rename(reverse_columns)
+            dataframe.undo_rename(columns)
 
         if isinstance(data, DataFrame):
             return dataframe
@@ -289,9 +280,8 @@ class DBConnector(ABC):
 
         logging.debug("Comparing using query:\n%s", query)
 
-        with self.cursor() as cursor:
-            cursor.execute(query)
-            db_rows = cursor.fetchall()
+        self.cursor.execute(query)
+        db_rows = self.cursor.fetchall()
 
         assert len(db_rows) > 0, "Compare query yielded no results."
         assert len(db_rows) >= len(
@@ -303,9 +293,10 @@ class DBConnector(ABC):
     def load(
         self,
         data,  # noqa: ANN001
-        compare_query: str,
         *,
         columns: dict[str, str] | None = None,
+        compare: bool = True,
+        compare_query: str | None = None,
         replace: bool = True,
         allow_duplication: bool = False,
         where: str | None = None,
@@ -316,11 +307,15 @@ class DBConnector(ABC):
         Args:
         ----
             data: DataFrame containing data to be inserted into the database.
-            compare_query: valid SQL query to retrieve data from the database to compare against
             columns: (Optional) translation of columns in data to column names in database.
                      Dictionary of format {data_name: db_name}.
                      If the same column name appears multiple times in the database,
                      prefix the column name with the desired table, eg. <table>.<column_name>
+            compare: Whether a comparison needs to be preformed after loading has completed.
+                     This tends to be flaky, so this allows you to turn it off.
+            compare_query: (Optional) valid SQL query to retrieve data from the database to compare against.
+                            Ignored if compare == False, automatically generated when compare == True and none is provided.
+                            This might break if you have a complicated database model.
             replace: (Optional) whether columns can be replaced when retrieving ids.
                      If False, id columns are concatenated.
             allow_duplication: (Optional) whether joining on ids from the database can result in
@@ -364,9 +359,10 @@ class DBConnector(ABC):
         for params in load_instructions.insert:
             self.insert(dataframe, **params)
 
-        logging.debug("Comparing...")
-        self.compare(
-            orig_dataframe, query=compare_query, where=where, exact=exact
-        )
+        if compare:
+            logging.debug("Comparing...")
+            self.compare(
+                orig_dataframe, query=compare_query, where=where, exact=exact
+            )
 
         return dataframe.data
