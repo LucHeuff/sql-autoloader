@@ -154,7 +154,6 @@ class SQLiteConnector(DBConnector):
         self.credentials = credentials
         self.allow_custom_dtypes = allow_custom_dtypes
 
-    # TODO for some reason the whole thing seems to execute but nothing is committed on __exit__?
     def __enter__(self) -> Self:
         """Enter context manager for SQLiteConnector by opening a connection.
 

@@ -2,8 +2,9 @@ class ETLComponentsError(Exception):
     """Base class for exceptions in this package."""
 
 
-class UnknownDataframeError(ETLComponentsError):
-    """Raised when an unknown dataframe type is provided."""
+# ---- Errors in dataframe operations
+class InvalidDataframeError(ETLComponentsError):
+    """Raised when the dataframe provided is invalid."""
 
 
 class MissingKeysAfterMergeError(ETLComponentsError):

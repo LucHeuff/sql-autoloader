@@ -4,7 +4,6 @@ from typing import Annotated, Callable, Self, TypedDict
 import networkx as nx
 from more_itertools import (
     collapse,
-    flatten,
     unique,
     unique_everseen,
     unique_justseen,
@@ -66,13 +65,12 @@ class Table(BaseModel):
         """
         return list(set(columns) & set(self.columns_and_foreign_keys))
 
-    # TODO use this in
     def get_prefixed_columns(self, columns: list[str]) -> list[tuple[str, str]]:
         """Get prefixed version of each column that apears in this table.
 
         Args:
         ----
-            columns: list of columns that may appear in this table
+            columns: list of columns that may appear in this table, which can be prefixed.
 
         Returns:
         -------
@@ -95,7 +93,7 @@ class Table(BaseModel):
     @cached_property
     def columns_and_foreign_keys(self) -> list[str]:
         """Return both the columns and the foreign keys for this table."""
-        return self.columns + self.foreign_keys
+        return self.foreign_keys + self.columns
 
     @property
     def has_primary_key(self) -> bool:
@@ -131,11 +129,11 @@ class Table(BaseModel):
     def __str__(self) -> str:
         """Return human readable representation of the table."""
         pk = [] if not self.has_primary_key else [self.primary_key]
-        cols = "\n\t".join([*pk, *self.foreign_keys, *self.columns])
+        cols = "\n\t".join([*pk, *self.columns_and_foreign_keys])
         return f"Table {self.name} (\n\t{cols}\n)"
 
 
-# Pydantic constraint for non empty string and more readable code
+# Pydantic constraint for non empty string, defining separately for more readable code
 non_empty_string = StringConstraints(min_length=1, strip_whitespace=True)
 
 
@@ -206,12 +204,12 @@ class LoadInstructions(BaseModel):
     @property
     def insert_and_retrieve_tables(self) -> list[str]:
         """Get a list of tables being inserted and retrieved."""
-        return [op["table"] for op in self.insert_and_retrieve]
+        return [d["table"] for d in self.insert_and_retrieve]
 
     @property
     def insert_tables(self) -> list[str]:
         """Get a list of tables being inserted."""
-        return [op["table"] for op in self.insert]
+        return [d["table"] for d in self.insert]
 
     def __repr__(self) -> str:
         """Return more readable repr for object."""
@@ -242,6 +240,12 @@ class Schema:
             self.graph.add_edge(
                 reference.to_table, reference.from_table, reference=reference
             )
+
+        # The resulting graph has to be a Directed Acyclic Graph for my algorithms to work.
+        # As far as I am aware, all valid SQL database structures should be DAGs
+        assert nx.is_directed_acyclic_graph(
+            self.graph
+        ), "Provided schema is not a DAG."
 
     # ---- Private methods
 
@@ -372,7 +376,7 @@ class Schema:
             raise EmptyColumnListError(message)
 
         if not any(col in table for col in columns):
-            message = f"None of {columns} exist in {table.name}. Table schema is:\n{table}"
+            message = f"None of {columns} exist in table '{table.name}'. Table schema is:\n{table}"
             raise ColumnsDoNotExistOnTableError(message)
 
         return table.get_common_columns(columns)
@@ -415,8 +419,8 @@ class Schema:
         where_clause = f"\n{where}" if where is not None else ""
 
         # Find the tables belonging to these columns
-        tables = self._get_relevant_tables(columns)
         # retrieve the subgraph for this set of tables and the topological ordering
+        tables = self._get_relevant_tables(columns)
         subgraph = nx.subgraph(self.graph, tables)
 
         # I cannot deal with comparing when isolated tables are involved, so throwing back to the user.
@@ -424,11 +428,10 @@ class Schema:
             isolated = [
                 nx.is_isolate(subgraph, node) for node in subgraph.nodes
             ]
-            message = f"Automatic compare query generation cannot handle any isolated tables, but {isolated} do not link to any other table. Either provide a compare query yourself, or make sure the data you are loading all relate to one another."
+            message = f"Automatic compare query generation cannot handle any isolated tables, but {isolated} do not link to any other table when considering {tables}.\nEither provide a compare query yourself, make sure the data you are loading all relate to one another, or disable comparison if you do not care."
             raise IsolatedTablesError(message)
 
         # --- Building the SELECT clause
-        # TODO the select clause should always use prefixed tables and retrieve using an alias
         # e.g <table>.<column> as <alias>
         select_columns = collapse(
             [
@@ -443,12 +446,14 @@ class Schema:
             for (prefixed, original) in select_columns
         ]
 
-        # TODO aliases toevoegen voor namen zoals ze in data gebeuren
         select_clause = f"SELECT\n{',\n'.join(select_aliases)}"
 
         # --- Building the JOIN clause
         # I want to be able to ignore the edge direction, so I also need an undirected graph.
         undirected = subgraph.to_undirected()
+
+        # TODO can all this be replaced with nx.dag_longest_path(subgraph)?
+        # ---- Replace below here?
 
         # Finding start and end nodes -> using topological generations to make sure I start
         # at a node that is only referenced, and end at a node that only references
@@ -473,6 +478,8 @@ class Schema:
             reverse=True,
         )[0]
         assert len(path) > 0, "only found empty base path."
+
+        # ---- Replace above here?
 
         # There is no guarantee that all tables have been visited by the path.
         # The missing tables will be added to the path iteratively,
@@ -574,16 +581,23 @@ class Schema:
             if self._get_table(table).has_primary_key and table not in isolated:
                 # Find the alias with which should be retrieved
                 # -> Look for successors of this node in the subgraph
-                successors = self.graph.successors(table)
+                successors = list(self.graph.successors(table))
+                assert (
+                    len(successors) > 0
+                ), f"Table '{table}' has primary key but no successors."
 
                 # Two differen list comprehensions because both the edge data and the dictionaries are theoretically allowed to be empty
                 # Could do this in one but that would make it even less readable
+
                 edge_attributes = [
                     attr
                     for child in successors
                     if (attr := self.graph.get_edge_data(table, child))
                     is not None
                 ]
+                assert (
+                    len(edge_attributes) > 0
+                ), f"No attributes on edges for table '{table}' and successors '{successors}'."
 
                 # Find how the reference refers to the id, if a reference was found
                 aliases = [
@@ -591,6 +605,9 @@ class Schema:
                     for attr in edge_attributes
                     if (ref := attr.get("reference", None)) is not None
                 ]
+                assert (
+                    len(aliases) > 0
+                ), f"No aliases were found, despite table '{table}' having a primary key and successors existing."
 
                 # It is possible that tables use different aliases. Currently, this code cannot handle that situation
                 # so raises an exception

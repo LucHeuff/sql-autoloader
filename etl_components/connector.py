@@ -1,10 +1,64 @@
 import logging
 from abc import ABC, abstractmethod
-from copy import copy
 from typing import Any, Protocol, Self
 
-from etl_components.dataframe import DataFrame, get_dataframe
+import polars as pl
+
+from etl_components.dataframe_operations import (
+    check_nulls,
+    compare,
+    get_rows,
+    merge_ids,
+)
 from etl_components.schema import ReferenceDict, Schema, TableDict
+
+logger = logging.getLogger(__name__)
+
+
+# --- Utility functions
+def invert(d: dict[str, str]) -> dict[str, str]:
+    """Inverts the keys and values of a dictionary."""
+    return {v: k for (k, v) in d.items()}
+
+
+def preprocess(
+    data: pl.DataFrame, columns: dict[str, str] | None
+) -> pl.DataFrame:
+    """Check if data contains nulls and rename columns.
+
+    Args:
+    ----
+        data: pl.DataFrame
+        columns: (Optional) dictionary of {old_name: new_name}
+
+    Returns:
+    -------
+        renamed pl.DataFrame
+
+    """
+    check_nulls(data)
+    columns = {} if columns is None else columns
+    return data.rename(columns)
+
+
+def postprocess(
+    data: pl.DataFrame, columns: dict[str, str] | None
+) -> pl.DataFrame:
+    """Undoes column renaming if required.
+
+    Args:
+    ----
+        data: pl.DataFrame
+        columns: (Optional) dictionary of {old_name: new_name}
+
+    Returns:
+    -------
+        original pl.DataFrame
+
+    """
+    if columns is not None:
+        return data.rename(invert(columns))
+    return data
 
 
 class Cursor(Protocol):
@@ -108,7 +162,7 @@ class DBConnector(ABC):
 
     def insert(
         self,
-        data,  # noqa: ANN001
+        data: pl.DataFrame,
         *,
         table: str,
         columns: dict[str, str] | None = None,
@@ -117,7 +171,7 @@ class DBConnector(ABC):
 
         Args:
         ----
-            data: DataFrame containing the data that needs to be inserted.
+            data: pl.DataFrame containing the data that needs to be inserted.
             table: name of the table to insert into
             columns: (Optional) dictionary linking column names in data with column names in dataframe
                      Example {data_name: db_name, ...}
@@ -125,41 +179,36 @@ class DBConnector(ABC):
                      from data match column names in the database
 
         """
-        dataframe = get_dataframe(data)
-        if columns is not None:
-            dataframe.rename(columns)
+        data = preprocess(data, columns)
+        common_columns = self.schema.parse_insert(table, data.columns)
+        assert len(common_columns) > 0, "No common columns were found."
 
-        common_columns = self.schema.parse_insert(table, dataframe.columns)
         query = self.get_insert_query(table, common_columns)
 
-        logging.debug(
-            "Inserting %s into %s using query:\n%s",
-            common_columns,
-            table,
-            query,
-        )
+        log_message = "Inserting %s into %s using query:\n%s"
+        logger.debug(log_message, common_columns, table, query)
 
         # Executing query
-        self.cursor.executemany(query, dataframe.rows(common_columns))
+        self.cursor.executemany(query, get_rows(data, common_columns))
 
-        if columns is not None:
-            dataframe.undo_rename(columns)
+        # postprocessing because processing happens in place.
+        data = postprocess(data, columns)
 
     def retrieve_ids(
         self,
-        data,  # noqa: ANN001
+        data: pl.DataFrame,
         *,
         table: str,
         alias: str,
         columns: dict[str, str] | None = None,
         replace: bool = True,
         allow_duplication: bool = False,
-    ) -> Any:  # noqa: ANN401
+    ) -> pl.DataFrame:
         """Retrieve ids from the database and join them to data.
 
         Args:
         ----
-            data: DataFrame containing the data for which ids need to be retrieved and joined
+            data: pl.DataFrame containing the data for which ids need to be retrieved and joined
             table: table to retrieve ids from
             alias: of the primary key of table
             columns: (Optional) dictionary linking column names in data with column names in dataframe
@@ -174,38 +223,31 @@ class DBConnector(ABC):
             data with ids from database added, or replacing original columns
 
         """
-        dataframe = get_dataframe(data)
-        if columns is not None:
-            dataframe.rename(columns)
+        data = preprocess(data, columns)
 
-        key, common_columns = self.schema.parse_retrieve(
-            table, alias, dataframe.columns
+        primary_key, common_columns = self.schema.parse_retrieve(
+            table, alias, data.columns
         )
 
-        query = self.get_retrieve_query(table, key, alias, common_columns)
-        logging.debug(
-            "Retrieving %s from %s using query:\n%s",
-            common_columns,
-            table,
-            query,
+        query = self.get_retrieve_query(
+            table, primary_key, alias, common_columns
         )
+        log_message = "Retrieving %s from %s using query:\n%s"
+        logger.debug(log_message, common_columns, table, query)
+
         # Executing query
         self.cursor.execute(query)
         db_fetch = self.cursor.fetchall()
 
-        dataframe.merge_ids(db_fetch, allow_duplication=allow_duplication)
+        data = merge_ids(
+            data, db_fetch, alias, allow_duplication=allow_duplication
+        )
 
         if replace:
             # Use table schema to determine which non_id columns can be dropped.
-            dataframe.drop(self.schema.get_columns(table))
-        elif not replace and columns is not None:
-            # making sure to reverse the naming of columns if they are not replaced
-            dataframe.undo_rename(columns)
+            data.drop(self.schema.get_columns(table))
 
-        if isinstance(data, DataFrame):
-            return dataframe
-
-        return dataframe.data
+        return postprocess(data, columns)
 
     def insert_and_retrieve_ids(
         self,
@@ -219,7 +261,7 @@ class DBConnector(ABC):
     ) -> Any:  # noqa: ANN401
         """Insert data into database and retrieve ids to join them to data.
 
-            data: DataFrame containing the data for which ids need to be retrieved and joined
+            data: pl.DataFrame containing the data for which ids need to be retrieved and joined
             table: table to retrieve ids from
             alias: of the primary key of table
             columns: (Optional) dictionary linking column names in data with column names in dataframe
@@ -247,7 +289,7 @@ class DBConnector(ABC):
 
     def compare(
         self,
-        data,  # noqa: ANN001
+        data: pl.DataFrame,
         *,
         query: str | None = None,
         columns: dict[str, str] | None = None,
@@ -258,7 +300,7 @@ class DBConnector(ABC):
 
         Args:
         ----
-            data: DataFrame containing data to be compared to
+            data: pl.DataFrame containing data to be compared to
             query: valid SQL query to retrieve data to compare to.
             columns: (Optional) dictionary linking column names in data with column names in dataframe
                      Example {data_name: db_name, ...}
@@ -268,31 +310,30 @@ class DBConnector(ABC):
                    the rows retrieved from the database. If False, only checks
                    if rows from data appear in rows from query.
 
+
         """
-        dataframe = get_dataframe(data)
-        if columns is not None:
-            dataframe.rename(columns)
+        data = preprocess(data, columns)
 
         if query is None:
-            query = self.schema.get_compare_query(
-                dataframe.columns, where=where
-            )
+            query = self.schema.get_compare_query(data.columns, where=where)
 
-        logging.debug("Comparing using query:\n%s", query)
+        logger.debug("Comparing using query:\n%s", query)
 
         self.cursor.execute(query)
         db_rows = self.cursor.fetchall()
 
         assert len(db_rows) > 0, "Compare query yielded no results."
         assert len(db_rows) >= len(
-            dataframe
+            data
         ), "Compare query yielded fewer rows than data."
 
-        dataframe.compare(db_rows, exact=exact)
+        compare(data, db_rows, exact=exact)
+
+        data = postprocess(data, columns)
 
     def load(
         self,
-        data,  # noqa: ANN001
+        data: pl.DataFrame,
         *,
         columns: dict[str, str] | None = None,
         compare: bool = True,
@@ -306,7 +347,7 @@ class DBConnector(ABC):
 
         Args:
         ----
-            data: DataFrame containing data to be inserted into the database.
+            data: pl.DataFrame containing data to be inserted into the database.
             columns: (Optional) translation of columns in data to column names in database.
                      Dictionary of format {data_name: db_name}.
                      If the same column name appears multiple times in the database,
@@ -331,38 +372,36 @@ class DBConnector(ABC):
             dataframe in original format (pandas or polars) with id columns
 
         """
-        dataframe = get_dataframe(data)
-        if columns is not None:
-            dataframe.rename(columns)
+        data = preprocess(data, columns)
 
-        orig_dataframe = copy(dataframe)
+        orig_data = data.clone()
 
-        logging.debug("Loading data using columns %s", dataframe.columns)
-        load_instructions = self.schema.get_load_instructions(dataframe.columns)
+        logger.debug("Loading data using columns %s", data.columns)
+        load_instructions = self.schema.get_load_instructions(data.columns)
 
-        logging.debug(
+        logger.debug(
             "Tables to insert and retrieve: %s",
             load_instructions.insert_and_retrieve_tables,
         )
-        logging.debug("Tables to insert: %s", load_instructions.insert_tables)
+        logger.debug("Tables to insert: %s", load_instructions.insert_tables)
 
-        logging.debug("Inserting and retrieving tables...")
+        logger.debug("Inserting and retrieving tables...")
         for params in load_instructions.insert_and_retrieve:
-            dataframe = self.insert_and_retrieve_ids(
-                dataframe,
+            data = self.insert_and_retrieve_ids(
+                data,
                 **params,
                 replace=replace,
                 allow_duplication=allow_duplication,
             )
 
-        logging.debug("Inserting tables...")
+        logger.debug("Inserting tables...")
         for params in load_instructions.insert:
-            self.insert(dataframe, **params)
+            self.insert(data, **params)
 
         if compare:
-            logging.debug("Comparing...")
+            logger.debug("Comparing...")
             self.compare(
-                orig_dataframe, query=compare_query, where=where, exact=exact
+                orig_data, query=compare_query, where=where, exact=exact
             )
 
-        return dataframe.data
+        return postprocess(data, columns)
