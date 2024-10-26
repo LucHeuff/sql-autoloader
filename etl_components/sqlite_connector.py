@@ -1,6 +1,5 @@
 import sqlite3
-from contextlib import contextmanager
-from typing import Iterator, Self
+from typing import Self
 
 from etl_components.connector import DBConnector
 from etl_components.schema import ReferenceDict, TableDict

@@ -117,4 +117,5 @@ def dag_generator(
     assume(nx.is_directed_acyclic_graph(graph))
     if no_isolates:
         assume(nx.number_of_isolates(graph) == 0)
+        assume(len(list(nx.weakly_connected_components(graph))) == 1)
     return graph

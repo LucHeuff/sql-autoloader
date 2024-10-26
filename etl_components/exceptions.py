@@ -68,6 +68,10 @@ class IsolatedTablesError(SchemaError):
     """Raised when compare query generation encounters isolated tables."""
 
 
+class IsolatedSubgraphsError(SchemaError):
+    """Raised when compare query generation encounters isolated subgraphs."""
+
+
 class InvalidTableError(ETLComponentsError):
     """Raised when Table validation fails."""
 

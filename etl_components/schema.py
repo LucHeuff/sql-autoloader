@@ -23,6 +23,7 @@ from etl_components.exceptions import (
     EmptyColumnListError,
     InvalidReferenceError,
     InvalidTableError,
+    IsolatedSubgraphsError,
     IsolatedTablesError,
     NoPrimaryKeyError,
     NoSuchColumnForTableError,
@@ -293,7 +294,9 @@ class Schema:
             table_name, _ = column_name.split(".")
             table = self._get_table(table_name)
             if not column_name in table:
-                message = f"{column_name} does not exist for {table_name}."
+                message = (
+                    f"Columns '{column_name}' does not exist for {table_name}."
+                )
                 raise NoSuchColumnForTableError(message)
             return table.name
 
@@ -303,7 +306,7 @@ class Schema:
 
         tables = self._column_table_mapping[column_name]
         if len(tables) > 1:
-            message = f"'{column_name}' is ambiguous, appears on tables {tables}.\nPlease prefix the column name with the correct table using the format <table>.<column>."
+            message = f"Column name '{column_name}' is ambiguous, as it appears on tables '{tables}'.\nPlease prefix the column name with the correct table using the format <table>.<column>."
             raise ColumnIsAmbiguousError(message)
 
         return tables[0]
@@ -348,7 +351,7 @@ class Schema:
             unique(self._get_table_name_by_column(col) for col in columns)
         )
 
-        for node in nx.topological_sort(self.graph):
+        for node in self._topological_sort:
             if node not in tables and all(
                 predecessor in tables
                 for predecessor in self.graph.predecessors(node)
@@ -376,7 +379,7 @@ class Schema:
             raise EmptyColumnListError(message)
 
         if not any(col in table for col in columns):
-            message = f"None of {columns} exist in table '{table.name}'. Table schema is:\n{table}"
+            message = f"None of '{columns}' exist in table '{table.name}'. Table schema is:\n{table}"
             raise ColumnsDoNotExistOnTableError(message)
 
         return table.get_common_columns(columns)
@@ -428,8 +431,20 @@ class Schema:
             isolated = [
                 nx.is_isolate(subgraph, node) for node in subgraph.nodes
             ]
-            message = f"Automatic compare query generation cannot handle any isolated tables, but {isolated} do not link to any other table when considering {tables}.\nEither provide a compare query yourself, make sure the data you are loading all relate to one another, or disable comparison if you do not care."
+            message = f"Automatic compare query generation cannot handle any isolated tables, but '{isolated}' do not link to any other table when considering '{tables}'.\nEither provide a compare query yourself, make sure the data you are loading all relate to one another, or disable comparison if you do not care."
             raise IsolatedTablesError(message)
+
+        # I also cannot deal with isolated subgraphs
+        if (
+            len(
+                isolated_subgraps := list(
+                    nx.weakly_connected_components(subgraph)
+                )
+            )
+            > 1
+        ):
+            message = f"Automatic compare query generation cannot handle isolated subgraphs, but found weakly connected components: '{isolated_subgraps}'"
+            raise IsolatedSubgraphsError(message)
 
         # --- Building the SELECT clause
         # e.g <table>.<column> as <alias>
@@ -452,34 +467,10 @@ class Schema:
         # I want to be able to ignore the edge direction, so I also need an undirected graph.
         undirected = subgraph.to_undirected()
 
-        # TODO can all this be replaced with nx.dag_longest_path(subgraph)?
         # ---- Replace below here?
+        path = nx.dag_longest_path(subgraph)
 
-        # Finding start and end nodes -> using topological generations to make sure I start
-        # at a node that is only referenced, and end at a node that only references
-        generations = list(nx.topological_generations(subgraph))
-        # finding a start node with the smallest out degree (least outward paths)
-        start_node = sorted(
-            generations[0], key=lambda node: subgraph.out_degree(node)
-        )[0]
-        # finding an end node that is in the last generation and furthest removed from the start node.
-        # This makes the step of iteratively finding a path more efficient.
-        end_node = sorted(
-            generations[-1],
-            key=lambda node: nx.dijkstra_path_length(
-                undirected, start_node, node
-            ),
-            reverse=True,
-        )[0]
-        # finding the longest path between start and end nodes
-        path: list[str] = sorted(
-            nx.all_simple_paths(undirected, start_node, end_node),
-            key=len,
-            reverse=True,
-        )[0]
         assert len(path) > 0, "only found empty base path."
-
-        # ---- Replace above here?
 
         # There is no guarantee that all tables have been visited by the path.
         # The missing tables will be added to the path iteratively,
@@ -607,12 +598,12 @@ class Schema:
                 ]
                 assert (
                     len(aliases) > 0
-                ), f"No aliases were found, despite table '{table}' having a primary key and successors existing."
+                ), f"No aliases were found, despite table '{table}' having a primary key and successors '{successors}'."
 
                 # It is possible that tables use different aliases. Currently, this code cannot handle that situation
                 # so raises an exception
                 if len(list(unique(aliases))) > 1:
-                    message = f"Table id {table} is referred to by multiple aliases: {aliases}, which alias to use is ambiguous."
+                    message = f"Table '{table}' is referred to by multiple aliases: '{aliases}', which alias to use is ambiguous. Either use a consistent alias or insert data manually."
                     raise AmbiguousAliasesError(message)
                 params.update(alias=aliases[0])
 
@@ -671,18 +662,22 @@ class Schema:
         table = self._get_table(table_name)
 
         if not table.has_primary_key:
-            message = f"Table {table_name} does not have a primary key. It does not make sense to retrieve ids from it."
+            message = f"Table '{table_name}' does not have a primary key. It does not make sense to retrieve ids from it."
             raise NoPrimaryKeyError(message)
 
         # checking if alias appears in the schema
         edges = self.graph.edges(table_name)
+        assert (
+            len(edges) > 0
+        ), f"Table '{table_name}' has a primary key but is not connected to any edges."
+
         references = [
             self.graph.get_edge_data(*edge)["reference"] for edge in edges
         ]
         if not alias in unique(
             [reference.from_key for reference in references]
         ):
-            message = f"Alias '{alias}' does not appear anywhere in the schema for table {table_name}."
+            message = f"Alias '{alias}' does not appear anywhere in the schema for table '{table_name}'."
             raise AliasDoesNotExistError(message)
 
         return table.primary_key, self._parse_columns(table, columns)
@@ -701,6 +696,11 @@ class Schema:
                 else:
                     mapping[col] += [table_name]
         return mapping
+
+    @cached_property
+    def _topological_sort(self) -> list[str]:
+        """Get topological sort for the entire graph."""
+        return list(nx.topological_sort(self.graph))
 
     def __str__(self) -> str:
         """Return schema as a string."""

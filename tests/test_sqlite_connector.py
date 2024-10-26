@@ -169,7 +169,7 @@ class SQLiteTable:
         if self.primary_key != "":
             cols = [f"{self.primary_key} INTEGER PRIMARY KEY", *cols]
 
-        contents = ",".join(cols)
+        contents = ", ".join(cols)
         return f"CREATE TABLE {self.name} ({contents});"
 
 
@@ -215,6 +215,9 @@ def integration_strategy(draw: st.DrawFn) -> IntegrationStrategy:
         sample_columns = draw(
             names_generator(min_size=num_cols, max_size=num_cols + 2)
         )
+
+        # preventing generating SQL keywords by accident
+        sample_columns = [f"_{col}" for col in sample_columns]
 
         if pk:
             # peel off the first column as the primary key
