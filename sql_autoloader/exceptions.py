@@ -1,30 +1,30 @@
-class ETLComponentsError(Exception):
+class SQLAutoloaderError(Exception):
     """Base class for exceptions in this package."""
 
 
 # ---- Errors in dataframe operations
-class InvalidDataframeError(ETLComponentsError):
+class InvalidDataframeError(SQLAutoloaderError):
     """Raised when the dataframe provided is invalid."""
 
 
-class MissingKeysAfterMergeError(ETLComponentsError):
+class MissingKeysAfterMergeError(SQLAutoloaderError):
     """Raised when merging data from the db results in missing values in id columns."""
 
 
-class MatchDatatypesError(ETLComponentsError):
+class MatchDatatypesError(SQLAutoloaderError):
     """Raised when matching datatypes fails."""
 
 
-class CompareMissingRowsError(ETLComponentsError):
+class CompareMissingRowsError(SQLAutoloaderError):
     """Raised during comparison when rows from data do not exist in the database."""
 
 
-class CompareNoExactMatchError(ETLComponentsError):
+class CompareNoExactMatchError(SQLAutoloaderError):
     """Raised during comparison when rows from data and rows from database are no exact match."""
 
 
 # ---- SchemaError and children
-class SchemaError(ETLComponentsError):
+class SchemaError(SQLAutoloaderError):
     """Raised when an error occurs when using the Schema."""
 
 
@@ -72,9 +72,9 @@ class IsolatedSubgraphsError(SchemaError):
     """Raised when compare query generation encounters isolated subgraphs."""
 
 
-class InvalidTableError(ETLComponentsError):
+class InvalidTableError(SQLAutoloaderError):
     """Raised when Table validation fails."""
 
 
-class InvalidReferenceError(ETLComponentsError):
+class InvalidReferenceError(SQLAutoloaderError):
     """Raised when Reference validation fails."""
