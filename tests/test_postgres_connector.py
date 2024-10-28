@@ -1,7 +1,7 @@
 import polars as pl
 from polars.testing import assert_frame_equal
 
-from etl_components.postgres_connector import (
+from sql_autoloader.postgres_connector import (
     PostgresConnector,
     _get_insert_query,
     _get_retrieve_query,

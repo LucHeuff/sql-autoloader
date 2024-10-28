@@ -7,7 +7,7 @@ import pytest
 from hypothesis import given
 from networkx import has_path
 
-from etl_components.exceptions import (
+from sql_autoloader.exceptions import (
     AliasDoesNotExistError,
     ColumnIsAmbiguousError,
     ColumnsDoNotExistOnTableError,
@@ -19,7 +19,7 @@ from etl_components.exceptions import (
     NoSuchColumnInSchemaError,
     TableDoesNotExistError,
 )
-from etl_components.schema import (
+from sql_autoloader.schema import (
     Reference,
     ReferenceDict,
     Schema,

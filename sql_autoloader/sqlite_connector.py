@@ -1,8 +1,8 @@
 import sqlite3
 from typing import Self
 
-from etl_components.connector import DBConnector
-from etl_components.schema import ReferenceDict, TableDict
+from sql_autoloader.connector import DBConnector
+from sql_autoloader.schema import ReferenceDict, TableDict
 
 # ---- Functions for getting SQL queries for the sqlite3 connector
 

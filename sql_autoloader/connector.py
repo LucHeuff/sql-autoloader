@@ -4,13 +4,13 @@ from typing import Any, Protocol, Self
 
 import polars as pl
 
-from etl_components.dataframe_operations import (
+from sql_autoloader.dataframe_operations import (
     check_nulls,
     compare,
     get_rows,
     merge_ids,
 )
-from etl_components.schema import ReferenceDict, Schema, TableDict
+from sql_autoloader.schema import ReferenceDict, Schema, TableDict
 
 logger = logging.getLogger(__name__)
 

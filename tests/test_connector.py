@@ -5,7 +5,7 @@ import polars as pl
 from hypothesis import given
 from polars.testing.parametric import dataframes
 
-from etl_components.connector import postprocess, preprocess
+from sql_autoloader.connector import postprocess, preprocess
 from tests.generators import names_generator
 
 

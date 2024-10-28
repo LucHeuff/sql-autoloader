@@ -8,7 +8,7 @@ from more_itertools import batched
 from polars.testing import assert_frame_equal
 from polars.testing.parametric import dataframes, dtypes
 
-from etl_components.dataframe_operations import (
+from sql_autoloader.dataframe_operations import (
     check_nulls,
     compare,
     get_rows,
@@ -16,7 +16,7 @@ from etl_components.dataframe_operations import (
     match_dtypes,
     merge_ids,
 )
-from etl_components.exceptions import (
+from sql_autoloader.exceptions import (
     CompareMissingRowsError,
     CompareNoExactMatchError,
     InvalidDataframeError,

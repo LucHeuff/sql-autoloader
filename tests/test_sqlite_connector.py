@@ -9,7 +9,7 @@ from hypothesis import given
 from more_itertools import batched
 from polars.testing import assert_frame_equal
 
-from etl_components.sqlite_connector import (
+from sql_autoloader.sqlite_connector import (
     SQLiteConnector,
     _get_insert_query,
     _get_retrieve_query,

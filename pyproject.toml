@@ -1,10 +1,11 @@
 [tool.poetry]
-name = "etl-components"
+name = "sql-autoloader"
 version = "2.0.0"
-description = "Components to automate loading steps in ETL pipelines"
+description = "Components to automate loading steps in ETL pipelines using SQL"
+license = "MIT"
 authors = ["Luc Heuff <10941592+LucHeuff@users.noreply.github.com>"]
 readme = "README.md"
-packages = [{include = "etl_components"}]
+packages = [{include = "sql_autoloader"}]
 
 
 [tool.poetry.dependencies]

@@ -1,7 +1,7 @@
 import polars as pl
 from polars.exceptions import InvalidOperationError
 
-from etl_components.exceptions import (
+from sql_autoloader.exceptions import (
     CompareMissingRowsError,
     CompareNoExactMatchError,
     InvalidDataframeError,

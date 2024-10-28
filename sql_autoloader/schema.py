@@ -15,7 +15,7 @@ from pydantic import (
     model_validator,
 )
 
-from etl_components.exceptions import (
+from sql_autoloader.exceptions import (
     AliasDoesNotExistError,
     AmbiguousAliasesError,
     ColumnIsAmbiguousError,

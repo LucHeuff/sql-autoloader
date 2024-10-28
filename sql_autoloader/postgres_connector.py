@@ -4,8 +4,8 @@ import polars as pl
 import psycopg
 from psycopg.rows import dict_row
 
-from etl_components.connector import DBConnector
-from etl_components.schema import ReferenceDict, TableDict
+from sql_autoloader.connector import DBConnector
+from sql_autoloader.schema import ReferenceDict, TableDict
 
 # ---- Functions for getting SQL queries from the psycopg connector
 
