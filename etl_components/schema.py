@@ -457,7 +457,7 @@ class Schema:
             base_type=tuple,
         )
         select_aliases = [
-            f"{prefixed} as '{original}'"
+            f'{prefixed} as "{original}"'
             for (prefixed, original) in select_columns
         ]
 

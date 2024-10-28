@@ -39,7 +39,7 @@ def _get_retrieve_query(
 
     Returns:
     -------
-        valid insert query
+        valid retrieve query
 
     """
     columns_section = ", ".join(columns)
@@ -116,6 +116,9 @@ def _fetch_schema(
 
         assert len(primary_key) <= 1, "Cannot have more than 1 primary key"
         primary_key = primary_key[0] if len(primary_key) == 1 else ""
+        assert (
+            foreign_keys != columns
+        ), "Foreign keys and columns cannot be the same."
 
         table_dict = {
             "name": table,
@@ -126,7 +129,6 @@ def _fetch_schema(
 
         table_dicts.append(table_dict)
 
-    # indenting is likely wrong, these print statement and the return are never reached?
     return table_dicts, reference_dicts
 
 
@@ -154,7 +156,7 @@ class SQLiteConnector(DBConnector):
         self.allow_custom_dtypes = allow_custom_dtypes
 
     def __enter__(self) -> Self:
-        """Enter context manager for SQLiteConnector by opening a connection.
+        """Enter context manager for SQLiteConnector by opening a connection and creating a cursor.
 
         Returns
         -------
@@ -178,7 +180,7 @@ class SQLiteConnector(DBConnector):
     def __exit__(
         self, exception: object, value: object, traceback: object
     ) -> None:
-        """Exit context manager by closing connection."""
+        """Exit context manager by closing connection, and rolling back on an exception."""
         if exception:
             self.connection.rollback()
         else:

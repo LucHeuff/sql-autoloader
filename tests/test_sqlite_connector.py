@@ -18,7 +18,7 @@ from tests.generators import dag_generator, names_generator
 
 
 def test_get_insert_query() -> None:
-    """Test if _get_insert_query() works as intended."""
+    """Test whether _get_insert_query() works as intended."""
     table = "fiets"
     columns = ["kleur", "zadel", "wielen"]
     query = "INSERT OR IGNORE INTO fiets (kleur, zadel, wielen) VALUES (:kleur, :zadel, :wielen)"
@@ -26,7 +26,7 @@ def test_get_insert_query() -> None:
 
 
 def test_get_retrieve_query() -> None:
-    """Test if _get_retrieve_query() works as intended."""
+    """Test whether _get_retrieve_query() works as intended."""
     table = "fiets"
     key = "id"
     alias = "fiets_id"

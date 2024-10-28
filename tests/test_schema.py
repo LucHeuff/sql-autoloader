@@ -458,6 +458,6 @@ def test_schema() -> None:
         "dealer.naam",
         "datum",
     ]
-    compare_query = """SELECT\naankoop.datum as 'datum',\ndealer.naam as 'dealer.naam',\neigenaar.naam as 'eigenaar.naam',\nmerk.naam as 'merk.naam',\nvoertuig_type.naam as 'voertuig_type.naam'\nFROM voertuig_type\nLEFT JOIN voertuig ON voertuig.type_id = voertuig_type.id\nLEFT JOIN merk ON voertuig.merk_id = merk.id\nLEFT JOIN merk_dealer ON merk_dealer.merk_id = merk.id\nLEFT JOIN dealer ON merk_dealer.dealer_id = dealer.id\nLEFT JOIN aankoop ON aankoop.voertuig_id = voertuig.id\nLEFT JOIN voertuig_eigenaar ON voertuig_eigenaar.voertuig_id = voertuig.id\nLEFT JOIN eigenaar ON voertuig_eigenaar.eigenaar_id = eigenaar.id"""
+    compare_query = """SELECT\naankoop.datum as "datum",\ndealer.naam as "dealer.naam",\neigenaar.naam as "eigenaar.naam",\nmerk.naam as "merk.naam",\nvoertuig_type.naam as "voertuig_type.naam"\nFROM voertuig_type\nLEFT JOIN voertuig ON voertuig.type_id = voertuig_type.id\nLEFT JOIN merk ON voertuig.merk_id = merk.id\nLEFT JOIN merk_dealer ON merk_dealer.merk_id = merk.id\nLEFT JOIN dealer ON merk_dealer.dealer_id = dealer.id\nLEFT JOIN aankoop ON aankoop.voertuig_id = voertuig.id\nLEFT JOIN voertuig_eigenaar ON voertuig_eigenaar.voertuig_id = voertuig.id\nLEFT JOIN eigenaar ON voertuig_eigenaar.eigenaar_id = eigenaar.id"""
 
     assert schema.get_compare_query(columns) == compare_query
