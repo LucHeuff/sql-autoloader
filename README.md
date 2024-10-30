@@ -13,23 +13,12 @@ Install with `pip` using:
 ```
 pip install git+https://github.com/LucHeuff/sql-autoloader.git
 ```
-Or including the `postgres` extra:
-
-```
-pip install 'sql-autoloader[postgres] @ git+https://github.com/LucHeuff/sql-autoloader.git'
-```
 ## `poetry`
 Install with [`poetry`](https://python-poetry.org) using:
 
 ```
 poetry install git+https://github.com/LucHeuff/sql-autoloader.git
 ```
-Or including the `postgres` extra:
-
-```
-poetry install 'sql-autoloader[postgres] @ git+https://github.com/LucHeuff/sql-autoloader.git'
-```
-
 or by adding it to `pyproject.toml`:
 
 ```
