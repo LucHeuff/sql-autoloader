@@ -1,17 +1,20 @@
 [tool.poetry]
-name = "etl-components"
-version = "1.2.4"
-description = "Components to build ETL pipelines using pandas and psycopg or sqlite"
+name = "sql-autoloader"
+version = "2.0.0"
+description = "Components to automate loading steps in ETL pipelines using SQL"
+license = "MIT"
 authors = ["Luc Heuff <10941592+LucHeuff@users.noreply.github.com>"]
 readme = "README.md"
-packages = [{include = "etl_components"}]
+packages = [{include = "sql_autoloader"}]
 
 
 [tool.poetry.dependencies]
 python = "^3.12"
-psycopg = "^3.1.18"
-pandas = "^2.2.0"
-python-dotenv = "^1.0.1"
+networkx = "^3.3"
+pydantic = "^2.9.2"
+more-itertools = "^10.5.0"
+polars = "^1.9.0"
+psycopg = "^3.2.3"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -19,8 +22,25 @@ ipython = "^8.22.1"
 ruff = "^0.2.2"
 neovim = "^0.3.1"
 pytest = "^8.0.1"
-hypothesis = "^6.98.10"
 poetry2setup = "^1.1.0"
+hypothesis = {extras = ["numpy"], version = "^6.115.3"}
+
+[tool.ruff]
+line-length = 80
+output-format = 'concise'
+
+[tool.ruff.lint]
+select = [
+    "F", "C90", "I", "N", "D", "ANN", "BLE", "FBT", "B", "A", "C4", "EM",
+    "ICN", "LOG", "G", "INP", "PIE", "T20", "PYI", "PT", "RSE", "RET", "SLF",
+    "SIM", "ARG", "FIX", "ERA", "PD", "PL", "TRY", "PERF", "RUF"
+]
+ignore = ["ANN101", "PLR09", "D100", "D104", "D201", "D203", "D213", "F401", "PD901", "N999"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
 
 [build-system]
 requires = ["poetry-core"]

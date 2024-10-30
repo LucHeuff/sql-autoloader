@@ -1,174 +1,319 @@
-# ETL Components
+# SQL Autoloader
 
-Contains convenience functions for ETL components built on top of `pandas`, `psycopg` and `sqlite3`.
+Contains automation of loading data into a SQL-like database, built around [`polars`](https://pola.rs/).
 
-These are opinionated functions for inserting, retrieving and comparing data in to a SQL database.
-Currently, `SQLite` and `PostgreSQL` are supported.
+Also includes convience functions for semi-manually inserting and retrieving data.
+Currently, `SQLite` (through `sqlite3`) and `PostgreSQL` (through `psycopg`) are supported.
 
 # Installation
 
-This package can be installed using `pip`:
+## `pip`
+Install with `pip` using:
 
 ```
-pip install git+https://github.com/LucHeuff/etl-components.git
+pip install git+https://github.com/LucHeuff/sql-autoloader.git
 ```
-
-or using [`poetry`](https://python-poetry.org):
+## `poetry`
+Install with [`poetry`](https://python-poetry.org) using:
 
 ```
-poetry install git+https://github.com/LucHeuff/etl-components.git
+poetry install git+https://github.com/LucHeuff/sql-autoloader.git
 ```
-
 or by adding it to `pyproject.toml`:
 
 ```
 [tool.poetry.dependencies]
-etl-components = { git = "https://github.com/LucHeuff/etl-components.git"}
+sql-autoloader = { git = "https://github.com/LucHeuff/sql-autoloader.git"}
 ```
 
 # How does it work?
 
-## `Cursor`s
+Often, loading data into a SQL database consists of two basic steps that are repeated many times:
 
-The package exposes two convenience wrapper functions to connect to a database:
+1. `INSERT`ing data into a table
+2. `RETRIEVE`ing the primary keys the database associated with the inserted data.
 
-- `PostgresCursor`: which uses `psycopg` under the hood to connect to a PostgreSQL database server. This cursor requires a `.env` file in which credentials are provided.
-- `SQLiteCursor`: which uses `sqlite3` under the hood to connect to a sqlite database file. This cursor needs a filename on initalisation.
+If done manually, this requires either writing repetitive `INSERT` and `RETRIEVE` queries by hand, 
+or writing some object-oriented replica of your database schema using an ORM and letting that handle 
+the loading steps (but this requires recording the database schema in two separate places).
 
-## Interaction functions
+Both of these work fine as long as the database schema does not change, but become labourious to edit
+once the schema does change.
 
-The package defines three modes of interaction with the database: `insert`, `retrieve_ids` and `compare`.
-`insert` is used to insert unique data into the database,
-`retrieve_ids` retrieves ID values from the database and merge these into the data,
-`compare` is used to validate that the data was correctly stored into the database.
+`sql-autoloader` simplifies this process by being aware of the database schema, and automatically generating 
+the required `INSERT` and `RETRIEVE` SQL queries based on the data that you are trying to load. 
+`sql-autoloader` does this by trying to match column names in the data with column names in the database schema,
+and also figures out the order in which to load such that consistency across referencing tables is maintained.
 
-A convenience function `insert_and_retrieve_ids` is provided as this those two actions are often combined.
+This does mean that `sql-autoloader` needs to make assumptions.
 
-Each of these functions requires a valid SQL query to perform the action on the database.
-The package is opinionated in the sense that it will try to enforce consistent queries and tries to catch common mistakes.
+## Assumptions
+- The data do not contain any missing values.
+    During the `RETRIEVE` step, data retrieved from the database are joined to the original data.
+    Missing values can behave very unpredictably during this process, so these are not allowed.
+- The database schema is defined prior to loading.
+    `sql-autoloader` reads the schema from the database, and tries to match this with the data you want to load.
+    That means the schema must be already be defined at the time of loading. 
+- There are no loops in the database schema.
+    Internally, the schema is assumed to form a Directed Acyclic Graph, meaning that there are no cycles of tables
+    that reference each other in a loop.
+- Foreign keys are named consistently.
+    As far as I am aware, SQL does not require foreign keys referring to the same primary key in another table to have the same name.
+    However, this makes algorithmically figuring out the order in which tables should be loaded much more difficult,
+    so `sql-autoloader` requires all foreign keys that refer to the same primary key to have the same name. 
+
+> Note that `sql-autoloader` will automatically raise exceptions if these assumptions are not met.
+
+## Validation
+By default, `sql-autoloader` will try to validate the loading operation by retrieving all the data it loaded
+and comparing that to the original data provided by the user. If these data do not match, all changes to the database are rolled back.
+Automatically generating the comparison query comes with an additional assumption: 
+
+-  All tables on which data is loaded are connected.
+    This means there exists a single query consisting of multiple `JOIN` statements that reconstruct the original data.
+    That also means there can be no isolated tables, or sets of isolated tables in the loading operation.
+
+> Note that this doesn't mean that all your tables need to be connected, this only needs to hold for the tables into which data are loaded.
+
+If your loading operation does match this assumption, you can either provide your own comparison query (through the `compare_query=` argument)
+or disable the validation entirely (by setting `compare=False`).
+
+The automatically generated query can also be restricted by adding a `WHERE`-clause (through the `where=` argument),
+or relaxed by setting `exact=False`, meaning that instead of having to exactly match, the original data only needs to appear in the data retrieved from the database.
+
+# How do I use it?
+
+`sql-autoloader` provides a context manager for each supported database. For example:
+
+SQLite:
+```
+from sql_autoloader import SQLiteConnector
+
+credentials = '<path_to_file>.db'
+
+with SQLiteConnector(credentials) as sqlite:
+   sqlite.load(data) 
+
+```
+
+Postgres:
+```
+from sql_autoloader import PostgresConnector
+
+credentials = 'postgresql://<username>:<password>@<host>:<port>/<db_name>'
+
+with PostgresConnector(credentials) as postgres:
+    postgres.load(data)
+
+```
+
+The context manager handles opening and closing the connection, and will roll back any changes on the database if an error occurs.
+In addition, it will also create a cursor and expose it (e.g. `sqlite.cursor` exposes a `sqlite3.Cursor`, `postgres.cursor` exposes a `psycopg.Cursor`) 
+in case you need access to the cursor directly.
+
+For example, this can be useful when you want to create the database schema from within Python:
+
+```
+from sql_autoloader import SQLiteConnector
+
+schema = """
+CREATE TABLE demo (
+    id INTEGER PRIMARY KEY,
+    name TEXT UNIQUE
+);
+...
+
+"""
+
+credentials = '<path_to_file>.db'
+
+with SQLiteConnector(credentials) as sqlite:
+   sqlite.cursor.executescript(schema) 
+   sqlite.update_schema() # The schema changed since when the context manager was created, so we need to update
+
+   sqlite.load(data) 
+```
+
+> Note
+> All connectors assume `data` to be a `polars.DataFrame`. If you are coming from `pandas` instead,
+> you can easily convert your `pandas.DataFrame` to a `polars.DataFrame` using:
+> ```
+import polars as pl
+polars_df = pl.from_pandas(pandas_df)
+> ```
 
 # Documentation
 
-## Cursors
+## Connector
+All `Connector`s have the following methods:
 
-### `SQLiteCursor`
-
-- `SQLiteCursor(filename: str)`: returns a `sqlite3.Cursor` object to interact with the database. Data rows are returned as dictionaries.
-
-Example use:
-
+**load**
+This is the main intended way for `sql-autoloader` to be used, which tries to automatically load the provided data
 ```
-with SQLiteCursor("test.db") as cursor:
-    cursor.execute("SELECT * FROM test")
-    data = pd.DataFrame(cursor.fetchall())
+load(
+    data: pl.DataFrame,
+    columns: dict[str, str] | None = None,
+    compare: bool = True,
+    compare_query: str | None = None,
+    replace: bool = True,
+    allow_duplication: bool = False,
+    where: str | None = None,
+    exact: bool = True,
+) -> pl.DataFrame
+```
+- `data`: a `polars.DataFrame` containing data to be loaded into the database
+- `columns` (Optional): Translation of columns in the data to the relevant column names in the database. If the same column name appears on multiple tables in the database, prefix the column with the desired table using the format <table>.<column_name>
+- `compare` (Optional): whether comparison needs to be performed.
+- `compare_query` (Optional): allows you to provide a custom comparison query for data validation. This is ignored when `compare=False`.
+- `replace` (Optional): Whether columns can be replaced with the relevant foreign keys upon retrieval. If set to `False`, all columns are preserved.
+- `allow_duplication` (Optional): Whether rows are allowed to be duplicated upon retrieval. 
+- `where` (Optional): allows adding a `WHERE`-clause to be added onto the comparison query. Please prefix the column you are conditioning on with its relevant table, otherwise this condition may result in SQL errors.
+- `exact` (Optional): whether the rows in the data retrieved through the comparison query must match `data` exactly. If set to `False`, will only check if the rows from `data` appear in the retrieved data.
+
+This function will return the original data including the foreign keys (where original columns were replaced depending on `replace`), in case you want to use these downstream.
+
+If for some reason `load()` does not produce the desired results, the loop can be constructed manually using the
+`insert()`, `retrieve_ids()` or `insert_and_retrieve_ids()` methods.
+
+**insert**
+This method inserts provided data into a single table. This can be used manually if `load()` is not working as desired.
+```
+insert(
+    data: pl.DataFrame,
+    table: str,
+    columns: dict[str, str] | None = None,
+) -> None:
+```
+- `data`: a `polars.DataFrame` containing data to be loaded into the table
+- `table`: the table that the data should be loaded into
+- `columns` (Optional): Translation of columns in the data to the relevant column names in the table, in the format {<data_name>: <db_name>, ...}
+
+As insertion is an operation on the database only, this method does not return anything.
+
+> Note that any columns that are present in `data` that are not relevant to `table` are simply ignored.
+
+**retrieve_ids**
+This methods retrieves primary keys from a single table and joins them to the provided data under the given alias.
+```
+retrieve_ids(
+    data: pl.DataFrame,
+    table: str,
+    alias: str,
+    columns: dict[str, str] | None = None,
+    replace: bool = True,
+    allow_duplication: bool = False,
+) -> pl.DataFrame:
+```
+- `data`: a `polars.DataFrame` containing data to which the keys should be joined
+- `table`: the table from which the primary keys should be retrieved
+- `alias`: the alias under which the primary key should be retrieved. Usually this is the name of the foreign key in some other table, referring to this table.
+- `columns` (Optional): Translation of columns in the data to the relevant column names in the table, in the format {<data_name>: <db_name>, ...}
+- `replace` (Optional): Whether columns can be replaced with the relevant foreign keys upon retrieval. If set to `False`, all columns are preserved.
+- `allow_duplication` (Optional): Whether rows are allowed to be duplicated upon retrieval. 
+
+This method will return a dataframe onto which the primary keys of `table` were joined, under the provided `alias`.
+
+> Note that any columns that are present in `data` that are not relevant to `table` are simply ignored.
+
+**insert_and_retrieve_ids**
+This is a convenience method that chains `insert()` and `retrieve_ids()` for the same table.
+```
+insert_and_retrieve_ids(
+    data: pl.DataFrame,
+    table: str,
+    alias: str,
+    columns: dict[str, str] | None = None,
+    replace: bool = True,
+    allow_duplication: bool = False,
+) -> pl.DataFrame:
+```
+*For parameter and output specification refer to `insert()` and `retrieve_ids()` above*
+
+**compare**
+This method performs comparison between the provided data and data fetched from the database using a provided query
+```
+compare(
+    data: pl.DataFrame,
+    query: str | None = None,
+    columns: dict[str, str] | None = None,
+    where: str | None = None,
+    exact: bool = True,
+) -> None:
+```
+- `data`: a `polars.DataFrame` containing data against which should be compared
+- `query` (Optional): a `SELECT` query to be run against the database, to fetch data that should be compared to `data`
+    If left empty, the method will attempt to generate a comparison query automatically.
+- `columns` (Optional): Translation of columns in the data to the relevant column names in the table, in the format {<data_name>: <db_name>, ...}
+- `where` (Optional): a `WHERE` clause to filter selection from the database. Should always use table prefixes for the columns being conditioned on.
+                     Mostly intended when `query` is left empty, otherwise you could just bundle it there as well.
+- `exact` (Optional): whether the rows in the data retrieved through the comparison query must match `data` exactly. If set to `False`, will only check if the rows from `data` appear in the retrieved data.
+
+**update_schema**
+The database schema is retrieved whenever the `*Connector` context manager is created.
+However, you may wish to create or adjust the database schema from within the context manager itself, at which point the
+schema in the database and the schema in the `*Connector` are out of sync.
+`update_schema()` allows you to update the schema in the `*Connector`.
+
+For example:
+```
+from sql_autoloader import SQLiteConnector
+
+schema = "<some valid SQL schema>"
+
+# creating a context manager on a new database file, so it is empty at the start
+with SQLiteConnector("new.db") as sqlite:
+    # at this point, the schema representation is empty
+    sqlite.cursor.executescript(schema)
+    # schema inside the SQLite database is now updated, but the schema representation is still empty
+    sqlite.update_schema() # update the schema representation as well.
+    
 ```
 
-### `PostgresCursor`:
+**print_schema**
+`print_schema()` is a convenience function to show a list of tables and the names of columns that the `*Connector` knows.
+This is not intended as a replacement of the full SQL schema, but instead as a reference to quickly check if everything is in working order,
+or if you don't have access to the full SQL schema for some reason.
 
-- `PostgresCursor()`: returns a `psycopg.Cursor` object to interact with the database. Data rows are returned as dictionaries.
-
-Example use:
-
+for example:
 ```
-with PostgresCursor() as cursor:
-    cursor.execute("SELECT * FROM test")
-    data = pd.DataFrame(cursor.fetchall())
-```
-
-To connect to the database server, `PostgresCursor` requires the following credentials to be defined in a `.env` file in the project root:
-
-- `HOST`: database host ip to PostgreSQL server
-- `PORT`: port to which PostgreSQL server listens (usually 5432)
-- `DB`: name of database to connect to
-- `USER` : username that has right on database
-- `PASSWORD` : to authenticate user
-
-## Functions
-
-### insert
-
-`insert(cursor: Cursor, query: str, data: pd.DataFrame, use_copy: bool = False)`
-
-- `cursor`: either a `PostgresCursor` or a `SQLiteCursor`
-- `query`: an insert query of the correct format (see below)
-- `data`: a `pandas.DataFrame` containing at least the columns to be inserted.
-- `use_copy`: allows inserting using the COPY protocol when using a `PostgresCursor`
-
-> NOTE:
-> When `use_copy` is enabled, the regular insert query is translated into a COPY query.
-> However, COPY does not support all the functionality that INSERT INTO provides.
-> Mainly, COPY will append to existing data, but will not handle constraint conflicts.
-> For more details, refer to the [PostgreSQL COPY documentation](https://www.postgresql.org/docs/current/sql-copy.html).
-
-### retrieve_ids
-
-`retrieve_ids(cursor: Cursor, query: str, data: pd.DataFrame, replace: bool = True) -> pd.DataFrame`
-
-- `cursor`: either a `PostgresCursor` or a `SQLiteCursor`
-- `query`: a retrieve query of the correct format (see below)
-- `data`: a `pandas.DataFrame` containing the columns to be merged
-- `replace`: whether the merge columns should be replaced with the IDs from the database
-- `allow_shrinking`: allows the number of rows in data to shrink due to merging with ids from the database
-- `allow_duplication`: allows the number of rows in data to increase due to merging with ids from the database
-
-### insert_and_retrieve_ids
-
-`insert_and_retrieve_ids(cursor: Cursor, insert_query: str, retrieve_query: str, data: pd.DataFrame, replace: bool = True, use_copy: bool = False) -> pd.DataFrame:`
-
-- `cursor`: either a `PostgresCursor` or a `SQLiteCursor`
-- `insert_query`: an insert query of the correct format (see below)
-- `retrieve_query`: a retrieve query of the correct format (see below)
-- `data`: a `pandas.DataFrame` containing at least the columns to be inserted.
-- `replace`: whether the merge columns should be replaced with the IDs from the database.
-- `use_copy`: allows inserting using the COPY protocol when using a `PostgresCursor`
-- `allow_shrinking`: allows the number of rows in data to shrink due to merging with ids from the database
-- `allow_duplication`: allows the number of rows in data to increase due to merging with ids from the database
-
-### compare
-
-`compare(cursor: Cursor, query: str, orig_data: pd.DataFrame, exact: bool=True)`
-
-- `cursor`: either a `PostgresCursor` or a `SQLiteCursor`
-- `query`: a compare query of the correct format (see below)
-- `orig_data`: original data that was inserted into the database (devoid of ids).
-- `exact`: when True, data read from database must match what is in `orig_data`. When False, checks if `orig_data` is a subset of the data in the database.
-
-## Formats
-
-### insert formats
-
-_The insert formats differ, since `sqlite3` and `psycopg` handle inserting using dictionary keys differently._
-
-#### SQlite
-
-```
-INSERT INTO <table> (<column_db_1>, <column_db_2>, ...)
-VALUES (:<column_df_1>, :<column_df_2>, ...)
+with SQLiteConnector(credentials) as sqlite:
+    sqlite.print_schema()
 ```
 
-#### PostgreSQL
+> Note that the information is incomplete, as the `*Connector` is not aware of table and column constraints, or default values.
 
+## SQLiteConnector
+The `SQLiteConnector` wraps the `sql-autoloader` functionality around the `sqlite3` library.
 ```
-INSERT INTO <table> (<column_db_1>, <column_db_2>, ...)
-VALUES (%(<column_df_1>)s, %(<column_df_2>)s, ...)
+SQLiteConnector(
+    credentials: str,
+    allow_custom_dtypes: bool = False
+)
 ```
+- `credentials`: path to a `sqlite` database, or ':memory:' for a SQLite database existing only in memory.
+- `allow_custom_dtypes` (Optional): enables custom datatypes, and can be used in combination with custom adapters and converters. For more information see the [sqlite3 documentation](https://docs.python.org/3/library/sqlite3.html#sqlite3-adapter-converter-recipes)
 
-### retrieve format
+The `SQLiteConnector.cursor` property exposes the `sqlite3.Cursor` used internally for manual use. See the [sqlite3 documentation on Cursors](https://docs.python.org/3/library/sqlite3.html#sqlite3.Cursor) for more information.
+> Note: the `SQLiteConnector` assumes that the cursor will be closed once the context manager exits. Closing the cursor prematurely will cause issues.
 
+## PostgresConnector
+The `PostgresConnector` wraps the `sql-autoloader` functionality around the `psycopg` library.
 ```
-SELECT id as <table>_id, <column_db_1> as <column_df_1>, <column_db_2> FROM <table>
+PostgresConnector(
+    credentials: str
+)
 ```
+- `credentials`: a [connection string](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING) to a running PostgreSQL server.
 
-### compare format
+The `PostgresCursor.cursor` property exposes the `psycopg.Cursor` used internally for manual use. See the [psycopg documentation on Cursors](https://www.psycopg.org/psycopg3/docs/api/cursors.html) for more information.
+> Note: the `PostgresConnector` assumes that the cursor will be closed once the context manager exits. Closing the cursor prematurely will cause issues.
 
+## Troubleshooting
+Since the `load()` operation has a lot of moving parts, troubleshooting can be difficult.
+For that reason, the basic load operations write what they are trying to do, and the SQL query they are trying to execute
+to the debugging logs.
+These can be accessed using the builting `logging` module:
 ```
-SELECT
-    <table>.<column_db_1> as <column_df_1>,
-    <table>.<column_db_2>,
-    <column_db_3>,
-    ...
-FROM <table>
-    JOIN <other_table> ON <other_table>.<table>_id = <table>.id
-    JOIN ...
-...
+import logging
+logging.getLogger("sql_autoloader").setLevel(level=logging.DEBUG)
 ```

@@ -5,4 +5,6 @@ dev.py
 
 # other other dev things
 .env
+*.db
+*.sql
 
