@@ -147,7 +147,7 @@ polars_df = pl.from_pandas(pandas_df)
 ## Connector
 All `Connector`s have the following methods:
 
-**load**
+### `load`
 This is the main intended way for `sql-autoloader` to be used, which tries to automatically load the provided data
 ```
 load(
@@ -175,7 +175,7 @@ This function will return the original data including the foreign keys (where or
 If for some reason `load()` does not produce the desired results, the loop can be constructed manually using the
 `insert()`, `retrieve_ids()` or `insert_and_retrieve_ids()` methods.
 
-**insert**
+### `insert`
 This method inserts provided data into a single table. This can be used manually if `load()` is not working as desired.
 ```
 insert(
@@ -192,7 +192,7 @@ As insertion is an operation on the database only, this method does not return a
 
 > Note that any columns that are present in `data` that are not relevant to `table` are simply ignored.
 
-**retrieve_ids**
+### `retrieve_ids`
 This methods retrieves primary keys from a single table and joins them to the provided data under the given alias.
 ```
 retrieve_ids(
@@ -215,7 +215,7 @@ This method will return a dataframe onto which the primary keys of `table` were 
 
 > Note that any columns that are present in `data` that are not relevant to `table` are simply ignored.
 
-**insert_and_retrieve_ids**
+### `insert_and_retrieve_ids`
 This is a convenience method that chains `insert()` and `retrieve_ids()` for the same table.
 ```
 insert_and_retrieve_ids(
@@ -229,7 +229,7 @@ insert_and_retrieve_ids(
 ```
 *For parameter and output specification refer to `insert()` and `retrieve_ids()` above*
 
-**compare**
+### `compare`
 This method performs comparison between the provided data and data fetched from the database using a provided query
 ```
 compare(
@@ -248,7 +248,7 @@ compare(
                      Mostly intended when `query` is left empty, otherwise you could just bundle it there as well.
 `exact` (Optional): whether the rows in the data retrieved through the comparison query must match `data` exactly. If set to `False`, will only check if the rows from `data` appear in the retrieved data.
 
-**update_schema**
+### `update_schema`
 The database schema is retrieved whenever the `*Connector` context manager is created.
 However, you may wish to create or adjust the database schema from within the context manager itself, at which point the
 schema in the database and the schema in the `*Connector` are out of sync.
@@ -269,7 +269,7 @@ with SQLiteConnector("new.db") as sqlite:
     
 ```
 
-**print_schema**
+### `print_schema`
 `print_schema()` is a convenience function to show a list of tables and the names of columns that the `*Connector` knows.
 This is not intended as a replacement of the full SQL schema, but instead as a reference to quickly check if everything is in working order,
 or if you don't have access to the full SQL schema for some reason.
