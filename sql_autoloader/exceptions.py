@@ -28,6 +28,10 @@ class SchemaError(SQLAutoloaderError):
     """Raised when an error occurs when using the Schema."""
 
 
+class EmptySchemaError(SchemaError):
+    """Raised when a schema required, but it is empty."""
+
+
 class TableDoesNotExistError(SchemaError):
     """Raised when the requested table does not exist in the Schema."""
 

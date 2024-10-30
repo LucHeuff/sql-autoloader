@@ -1,6 +1,8 @@
 import polars as pl
+import pytest
 from polars.testing import assert_frame_equal
 
+from sql_autoloader.exceptions import EmptySchemaError
 from sql_autoloader.postgres_connector import (
     PostgresConnector,
     _get_insert_query,

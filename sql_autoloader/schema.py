@@ -21,6 +21,7 @@ from sql_autoloader.exceptions import (
     ColumnIsAmbiguousError,
     ColumnsDoNotExistOnTableError,
     EmptyColumnListError,
+    EmptySchemaError,
     InvalidReferenceError,
     InvalidTableError,
     IsolatedSubgraphsError,
@@ -386,6 +387,12 @@ class Schema:
 
     # ---- Public methods
 
+    def check_schema_not_empty(self) -> None:
+        """Check if the schema is not empty."""
+        if self.is_empty:
+            message = "Database does not contain any tables."
+            raise EmptySchemaError(message)
+
     def get_columns(self, table_name: str) -> list[str]:
         """Get a list of columns that are not primary or foreign keys for this table.
 
@@ -510,7 +517,7 @@ class Schema:
         # making sure the loop above resulted in a valid path
         assert nx.is_path(
             undirected, path
-        ), "Adding missing tables resulted in an unvalid path."
+        ), "Adding missing tables resulted in an invalid path."
 
         # retrieving references based on the path, and removing duplicates
         references = list(
@@ -701,6 +708,11 @@ class Schema:
     def _topological_sort(self) -> list[str]:
         """Get topological sort for the entire graph."""
         return list(nx.topological_sort(self.graph))
+
+    @property
+    def is_empty(self) -> bool:
+        """Returns whether the graph is empty."""
+        return len(self.graph.nodes) == 0
 
     def __str__(self) -> str:
         """Return schema as a string."""

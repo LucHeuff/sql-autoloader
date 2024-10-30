@@ -5,10 +5,12 @@ from tempfile import NamedTemporaryFile
 import hypothesis.strategies as st
 import networkx as nx
 import polars as pl
+import pytest
 from hypothesis import given
 from more_itertools import batched
 from polars.testing import assert_frame_equal
 
+from sql_autoloader.exceptions import EmptySchemaError
 from sql_autoloader.sqlite_connector import (
     SQLiteConnector,
     _get_insert_query,
@@ -121,9 +123,14 @@ def test_basic_integration() -> None:
     # real use probably won't be in memory either.
     with NamedTemporaryFile(suffix=".db") as file:
         with SQLiteConnector(file.name) as sqlite:
-            sqlite.cursor.executescript(schema)
+            # load should not work before there is a schema
+            with pytest.raises(EmptySchemaError):
+                sqlite.load(data, columns=columns)
 
+            # defining the schema and updating
+            sqlite.cursor.executescript(schema)
             sqlite.update_schema()
+
             sqlite.load(data, columns=columns)
 
         # Testing if the data were saved to the file as well
@@ -264,6 +271,10 @@ def test_integration(strategy: IntegrationStrategy) -> None:
     """Simulation test of SQLiteConnector."""
     with NamedTemporaryFile(suffix=".db") as file:  # noqa: SIM117
         with SQLiteConnector(file.name) as sqlite:
+            # load should not work before there is a schema
+            with pytest.raises(EmptySchemaError):
+                sqlite.load(strategy.df)
+
             sqlite.cursor.executescript(strategy.schema)
             sqlite.update_schema()
 

@@ -12,6 +12,7 @@ from sql_autoloader.exceptions import (
     ColumnIsAmbiguousError,
     ColumnsDoNotExistOnTableError,
     EmptyColumnListError,
+    EmptySchemaError,
     InvalidReferenceError,
     InvalidTableError,
     NoPrimaryKeyError,
@@ -283,6 +284,9 @@ def test_schema() -> None:
 
     schema = Schema(get_schema)
 
+    # --- Testing schema.is_empty
+    assert schema.is_empty == False
+
     # --- Testing Schema.get_columns
 
     # Testing if correct exception is raised when the table does not exist
@@ -461,3 +465,16 @@ def test_schema() -> None:
     compare_query = """SELECT\naankoop.datum as "datum",\ndealer.naam as "dealer.naam",\neigenaar.naam as "eigenaar.naam",\nmerk.naam as "merk.naam",\nvoertuig_type.naam as "voertuig_type.naam"\nFROM voertuig_type\nLEFT JOIN voertuig ON voertuig.type_id = voertuig_type.id\nLEFT JOIN merk ON voertuig.merk_id = merk.id\nLEFT JOIN merk_dealer ON merk_dealer.merk_id = merk.id\nLEFT JOIN dealer ON merk_dealer.dealer_id = dealer.id\nLEFT JOIN aankoop ON aankoop.voertuig_id = voertuig.id\nLEFT JOIN voertuig_eigenaar ON voertuig_eigenaar.voertuig_id = voertuig.id\nLEFT JOIN eigenaar ON voertuig_eigenaar.eigenaar_id = eigenaar.id"""
 
     assert schema.get_compare_query(columns) == compare_query
+
+
+def test_empty_schema() -> None:
+    """Test whether an empty schema is correctly identified."""
+
+    def empty_schema() -> tuple[list[TableDict], list[ReferenceDict]]:
+        return [], []
+
+    schema = Schema(empty_schema)
+
+    assert schema.is_empty == True
+    with pytest.raises(EmptySchemaError):
+        schema.check_schema_not_empty()

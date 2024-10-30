@@ -179,6 +179,7 @@ class DBConnector(ABC):
                      from data match column names in the database
 
         """
+        self.schema.check_schema_not_empty()
         data = preprocess(data, columns)
         common_columns = self.schema.parse_insert(table, data.columns)
         assert len(common_columns) > 0, "No common columns were found."
@@ -223,6 +224,7 @@ class DBConnector(ABC):
             data with ids from database added, or replacing original columns
 
         """
+        self.schema.check_schema_not_empty()
         data = preprocess(data, columns)
 
         primary_key, common_columns = self.schema.parse_retrieve(
@@ -251,14 +253,14 @@ class DBConnector(ABC):
 
     def insert_and_retrieve_ids(
         self,
-        data,  # noqa: ANN001
+        data: pl.DataFrame,
         *,
         table: str,
         alias: str,
         columns: dict[str, str] | None = None,
         replace: bool = True,
         allow_duplication: bool = False,
-    ) -> Any:  # noqa: ANN401
+    ) -> pl.DataFrame:
         """Insert data into database and retrieve ids to join them to data.
 
             data: pl.DataFrame containing the data for which ids need to be retrieved and joined
@@ -312,6 +314,7 @@ class DBConnector(ABC):
 
 
         """
+        self.schema.check_schema_not_empty()
         data = preprocess(data, columns)
 
         if query is None:
@@ -342,7 +345,7 @@ class DBConnector(ABC):
         allow_duplication: bool = False,
         where: str | None = None,
         exact: bool = True,
-    ) -> Any:  # noqa: ANN401
+    ) -> pl.DataFrame:
         """Automatically load data into the database.
 
         Args:
@@ -369,9 +372,10 @@ class DBConnector(ABC):
 
         Returns:
         -------
-            dataframe in original format (pandas or polars) with id columns
+            pl.DataFrame including foreign keys
 
         """
+        self.schema.check_schema_not_empty()
         data = preprocess(data, columns)
 
         orig_data = data.clone()
