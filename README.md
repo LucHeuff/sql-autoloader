@@ -161,14 +161,14 @@ load(
     exact: bool = True,
 ) -> pl.DataFrame
 ```
-- `data`: a `polars.DataFrame` containing data to be loaded into the database
-- `columns` (Optional): Translation of columns in the data to the relevant column names in the database. If the same column name appears on multiple tables in the database, prefix the column with the desired table using the format <table>.<column_name>
-- `compare` (Optional): whether comparison needs to be performed.
-- `compare_query` (Optional): allows you to provide a custom comparison query for data validation. This is ignored when `compare=False`.
-- `replace` (Optional): Whether columns can be replaced with the relevant foreign keys upon retrieval. If set to `False`, all columns are preserved.
-- `allow_duplication` (Optional): Whether rows are allowed to be duplicated upon retrieval. 
-- `where` (Optional): allows adding a `WHERE`-clause to be added onto the comparison query. Please prefix the column you are conditioning on with its relevant table, otherwise this condition may result in SQL errors.
-- `exact` (Optional): whether the rows in the data retrieved through the comparison query must match `data` exactly. If set to `False`, will only check if the rows from `data` appear in the retrieved data.
+`data`: a `polars.DataFrame` containing data to be loaded into the database
+`columns` (Optional): Translation of columns in the data to the relevant column names in the database. If the same column name appears on multiple tables in the database, prefix the column with the desired table using the format <table>.<column_name>
+`compare` (Optional): whether comparison needs to be performed.
+`compare_query` (Optional): allows you to provide a custom comparison query for data validation. This is ignored when `compare=False`.
+`replace` (Optional): Whether columns can be replaced with the relevant foreign keys upon retrieval. If set to `False`, all columns are preserved.
+`allow_duplication` (Optional): Whether rows are allowed to be duplicated upon retrieval. 
+`where` (Optional): allows adding a `WHERE`-clause to be added onto the comparison query. Please prefix the column you are conditioning on with its relevant table, otherwise this condition may result in SQL errors.
+`exact` (Optional): whether the rows in the data retrieved through the comparison query must match `data` exactly. If set to `False`, will only check if the rows from `data` appear in the retrieved data.
 
 This function will return the original data including the foreign keys (where original columns were replaced depending on `replace`), in case you want to use these downstream.
 
@@ -184,9 +184,9 @@ insert(
     columns: dict[str, str] | None = None,
 ) -> None:
 ```
-- `data`: a `polars.DataFrame` containing data to be loaded into the table
-- `table`: the table that the data should be loaded into
-- `columns` (Optional): Translation of columns in the data to the relevant column names in the table, in the format {<data_name>: <db_name>, ...}
+`data`: a `polars.DataFrame` containing data to be loaded into the table
+`table`: the table that the data should be loaded into
+`columns` (Optional): Translation of columns in the data to the relevant column names in the table, in the format {<data_name>: <db_name>, ...}
 
 As insertion is an operation on the database only, this method does not return anything.
 
@@ -204,12 +204,12 @@ retrieve_ids(
     allow_duplication: bool = False,
 ) -> pl.DataFrame:
 ```
-- `data`: a `polars.DataFrame` containing data to which the keys should be joined
-- `table`: the table from which the primary keys should be retrieved
-- `alias`: the alias under which the primary key should be retrieved. Usually this is the name of the foreign key in some other table, referring to this table.
-- `columns` (Optional): Translation of columns in the data to the relevant column names in the table, in the format {<data_name>: <db_name>, ...}
-- `replace` (Optional): Whether columns can be replaced with the relevant foreign keys upon retrieval. If set to `False`, all columns are preserved.
-- `allow_duplication` (Optional): Whether rows are allowed to be duplicated upon retrieval. 
+`data`: a `polars.DataFrame` containing data to which the keys should be joined
+`table`: the table from which the primary keys should be retrieved
+`alias`: the alias under which the primary key should be retrieved. Usually this is the name of the foreign key in some other table, referring to this table.
+`columns` (Optional): Translation of columns in the data to the relevant column names in the table, in the format {<data_name>: <db_name>, ...}
+`replace` (Optional): Whether columns can be replaced with the relevant foreign keys upon retrieval. If set to `False`, all columns are preserved.
+`allow_duplication` (Optional): Whether rows are allowed to be duplicated upon retrieval. 
 
 This method will return a dataframe onto which the primary keys of `table` were joined, under the provided `alias`.
 
@@ -240,13 +240,13 @@ compare(
     exact: bool = True,
 ) -> None:
 ```
-- `data`: a `polars.DataFrame` containing data against which should be compared
-- `query` (Optional): a `SELECT` query to be run against the database, to fetch data that should be compared to `data`
+`data`: a `polars.DataFrame` containing data against which should be compared
+`query` (Optional): a `SELECT` query to be run against the database, to fetch data that should be compared to `data`
     If left empty, the method will attempt to generate a comparison query automatically.
-- `columns` (Optional): Translation of columns in the data to the relevant column names in the table, in the format {<data_name>: <db_name>, ...}
-- `where` (Optional): a `WHERE` clause to filter selection from the database. Should always use table prefixes for the columns being conditioned on.
+`columns` (Optional): Translation of columns in the data to the relevant column names in the table, in the format {<data_name>: <db_name>, ...}
+`where` (Optional): a `WHERE` clause to filter selection from the database. Should always use table prefixes for the columns being conditioned on.
                      Mostly intended when `query` is left empty, otherwise you could just bundle it there as well.
-- `exact` (Optional): whether the rows in the data retrieved through the comparison query must match `data` exactly. If set to `False`, will only check if the rows from `data` appear in the retrieved data.
+`exact` (Optional): whether the rows in the data retrieved through the comparison query must match `data` exactly. If set to `False`, will only check if the rows from `data` appear in the retrieved data.
 
 **update_schema**
 The database schema is retrieved whenever the `*Connector` context manager is created.
@@ -290,8 +290,8 @@ SQLiteConnector(
     allow_custom_dtypes: bool = False
 )
 ```
-- `credentials`: path to a `sqlite` database, or ':memory:' for a SQLite database existing only in memory.
-- `allow_custom_dtypes` (Optional): enables custom datatypes, and can be used in combination with custom adapters and converters. For more information see the [sqlite3 documentation](https://docs.python.org/3/library/sqlite3.html#sqlite3-adapter-converter-recipes)
+`credentials`: path to a `sqlite` database, or ':memory:' for a SQLite database existing only in memory.
+`allow_custom_dtypes` (Optional): enables custom datatypes, and can be used in combination with custom adapters and converters. For more information see the [sqlite3 documentation](https://docs.python.org/3/library/sqlite3.html#sqlite3-adapter-converter-recipes)
 
 The `SQLiteConnector.cursor` property exposes the `sqlite3.Cursor` used internally for manual use. See the [sqlite3 documentation on Cursors](https://docs.python.org/3/library/sqlite3.html#sqlite3.Cursor) for more information.
 > Note: the `SQLiteConnector` assumes that the cursor will be closed once the context manager exits. Closing the cursor prematurely will cause issues.
@@ -303,7 +303,7 @@ PostgresConnector(
     credentials: str
 )
 ```
-- `credentials`: a [connection string](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING) to a running PostgreSQL server.
+`credentials`: a [connection string](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING) to a running PostgreSQL server.
 
 The `PostgresCursor.cursor` property exposes the `psycopg.Cursor` used internally for manual use. See the [psycopg documentation on Cursors](https://www.psycopg.org/psycopg3/docs/api/cursors.html) for more information.
 > Note: the `PostgresConnector` assumes that the cursor will be closed once the context manager exits. Closing the cursor prematurely will cause issues.
