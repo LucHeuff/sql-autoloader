@@ -312,8 +312,9 @@ The `PostgresCursor.cursor` property exposes the `psycopg.Cursor` used internall
 Since the `load()` operation has a lot of moving parts, troubleshooting can be difficult.
 For that reason, the basic load operations write what they are trying to do, and the SQL query they are trying to execute
 to the debugging logs.
-These can be accessed using the builting `logging` module:
+These can be accessed using the builting `logging` module by setting the level to `logging.DEBUG`, for instance:
 ```
 import logging
-logging.getLogger("sql_autoloader").setLevel(level=logging.DEBUG)
+logging.getLogger("sql_autoloader").setLevel(level=logging.DEBUG) 
 ```
+
