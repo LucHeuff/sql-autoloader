@@ -580,9 +580,6 @@ class Schema:
                 # Find the alias with which should be retrieved
                 # -> Look for successors of this node in the subgraph
                 successors = list(self.graph.successors(table))
-                assert (
-                    len(successors) > 0
-                ), f"Table '{table}' has primary key but no successors."
 
                 # Two differen list comprehensions because both the edge data and the dictionaries are theoretically allowed to be empty
                 # Could do this in one but that would make it even less readable
