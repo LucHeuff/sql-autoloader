@@ -72,6 +72,7 @@ def test_basic_integration() -> None:
     );
 
     CREATE TABLE aankoop (
+      id INTEGER PRIMARY KEY,
       voertuig_id INTEGER REFERENCES voertuig (id),
       merk_dealer_id INTEGER REFERENCES merk_dealer (id),
       datum TEXT,
@@ -214,7 +215,7 @@ def integration_strategy(draw: st.DrawFn) -> IntegrationStrategy:
         # (and speed up the randomisation process)
 
         # need 1 primary key if the table has successors
-        pk = len(successors) > 0
+        pk = 1 if len(successors) > 0 else draw(st.booleans())
 
         # making sure there is at least one column in the table if there is no primary key
         num_cols = max(1, pk + 1)

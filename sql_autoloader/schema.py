@@ -564,8 +564,6 @@ class Schema:
         subgraph = nx.subgraph(self.graph, tables)
         order = nx.topological_sort(subgraph)
 
-        isolated = nx.isolates(subgraph)  # list of nodes with no neighbours
-
         insert_and_retrieve = []
         insert = []
 
@@ -576,14 +574,15 @@ class Schema:
 
             # insertion and retrieval only needs to be performed if the table has a primary key
             # and is referred to in the current subgraph
-            if self._get_table(table).has_primary_key and table not in isolated:
+
+            # -> Look for successors of this node in the subgraph
+            successors = list(self.graph.successors(table))
+
+            if self._get_table(table).has_primary_key and len(successors) > 0:
                 # Find the alias with which should be retrieved
-                # -> Look for successors of this node in the subgraph
-                successors = list(self.graph.successors(table))
 
                 # Two differen list comprehensions because both the edge data and the dictionaries are theoretically allowed to be empty
                 # Could do this in one but that would make it even less readable
-
                 edge_attributes = [
                     attr
                     for child in successors
