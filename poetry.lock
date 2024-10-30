@@ -936,10 +936,7 @@ files = [
     {file = "wcwidth-0.2.13.tar.gz", hash = "sha256:72ea0c06399eb286d978fdedb6923a9eb47e1c486ce63e9b4e64fc18303972b5"},
 ]
 
-[extras]
-postgres = []
-
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "901d2b4f3516eef0a774cb629741114ffa3c0c504f18e6fe5090aeb0f46b3f6e"
+content-hash = "bebe65cb57f20c06e94892a0f05044801b44917fc72046b4d07284e11a0fbaed"
