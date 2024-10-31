@@ -17,7 +17,7 @@ pip install git+https://github.com/LucHeuff/sql-autoloader.git
 Install with [`poetry`](https://python-poetry.org) using:
 
 ```
-poetry install git+https://github.com/LucHeuff/sql-autoloader.git
+poetry add git+https://github.com/LucHeuff/sql-autoloader.git
 ```
 or by adding it to `pyproject.toml`:
 
