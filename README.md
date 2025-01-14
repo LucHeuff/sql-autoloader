@@ -3,7 +3,7 @@
 Contains automation of loading data into a SQL-like database, built around [`polars`](https://pola.rs/).
 
 Also includes convience functions for semi-manually inserting and retrieving data.
-Currently, `SQLite` (through `sqlite3`) and `PostgreSQL` (through `psycopg`) are supported.
+Currently, `SQLite` (through `sqlite3`) and `PostgreSQL` (through optional extra `psycopg`) are supported.
 
 # Installation
 
@@ -13,17 +13,10 @@ Install with `pip` using:
 ```
 pip install git+https://github.com/LucHeuff/sql-autoloader.git
 ```
-## `poetry`
-Install with [`poetry`](https://python-poetry.org) using:
+To add the `psycopg` extra use:
 
 ```
-poetry add git+https://github.com/LucHeuff/sql-autoloader.git
-```
-or by adding it to `pyproject.toml`:
-
-```
-[tool.poetry.dependencies]
-sql-autoloader = { git = "https://github.com/LucHeuff/sql-autoloader.git"}
+pip install gi+https://github.com/LucHeuff/sql-autoloader.git#egg=sql-autoloader[postgres]
 ```
 
 # How does it work?
@@ -98,7 +91,7 @@ with SQLiteConnector(credentials) as sqlite:
 
 Postgres:
 ```
-from sql_autoloader import PostgresConnector
+from sql_autoloader.postgres import PostgresConnector
 
 credentials = 'postgresql://<username>:<password>@<host>:<port>/<db_name>'
 

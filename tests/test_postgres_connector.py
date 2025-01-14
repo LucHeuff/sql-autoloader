@@ -1,16 +1,15 @@
 import polars as pl
-import pytest
 from polars.testing import assert_frame_equal
 
-from sql_autoloader.exceptions import EmptySchemaError
-from sql_autoloader.postgres_connector import (
+from sql_autoloader.postgres import (
     PostgresConnector,
+)
+from sql_autoloader.postgres.postgres_connector import (
     _get_insert_query,
     _get_retrieve_query,
 )
 
 CONNECT_STRING = "postgresql://test:test@localhost/test"
-
 
 def test_get_insert_query() -> None:
     """Test whether _get_insert_query() works as intended."""

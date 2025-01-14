@@ -1,47 +1,38 @@
-[tool.poetry]
+[project]
 name = "sql-autoloader"
-version = "2.0.0"
-description = "Components to automate loading steps in ETL pipelines using SQL"
-license = "MIT"
-authors = ["Luc Heuff <10941592+LucHeuff@users.noreply.github.com>"]
+version = "0.1.0"
+description = "Add your description here"
 readme = "README.md"
-packages = [{include = "sql_autoloader"}]
+authors = [
+    { name = "Luc Heuff", email = "10941592+LucHeuff@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "more-itertools>=10.5.0",
+    "networkx>=3.4.2",
+    "polars>=1.19.0",
+    "pydantic>=2.10.5",
+]
 
+[project.scripts]
+sql-autoloader = "sql_autoloader:main"
 
-[tool.poetry.dependencies]
-python = "^3.12"
-networkx = "3.4.2"
-pydantic = "^2.9.2"
-more-itertools = "^10.5.0"
-polars = "^1.9.0"
-psycopg = "^3.2.3"
-
-
-[tool.poetry.group.dev.dependencies]
-ipython = "^8.22.1"
-ruff = "^0.2.2"
-neovim = "^0.3.1"
-pytest = "^8.0.1"
-poetry2setup = "^1.1.0"
-hypothesis = {extras = ["numpy"], version = "^6.115.3"}
+[project.optional-dependencies]
+postgres = [
+    "psycopg>=3.2.3",
+]
 
 [tool.ruff]
-line-length = 80
-output-format = 'concise'
-
-[tool.ruff.lint]
-select = [
-    "F", "C90", "I", "N", "D", "ANN", "BLE", "FBT", "B", "A", "C4", "EM",
-    "ICN", "LOG", "G", "INP", "PIE", "T20", "PYI", "PT", "RSE", "RET", "SLF",
-    "SIM", "ARG", "FIX", "ERA", "PD", "PL", "TRY", "PERF", "RUF"
-]
-ignore = ["ANN101", "PLR09", "D100", "D104", "D201", "D203", "D213", "F401", "PD901", "N999"]
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-docstring-code-format = true
+extend = "~/ruff.toml"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.23.2",
+    "hypothesis[numpy]>=6.123.17",
+    "pytest>=8.3.4",
+    "ruff>=0.9.1",
+]

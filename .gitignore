@@ -7,4 +7,5 @@ dev.py
 .env
 *.db
 *.sql
+*.lock
 
