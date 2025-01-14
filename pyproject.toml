@@ -14,9 +14,6 @@ dependencies = [
     "pydantic>=2.10.5",
 ]
 
-[project.scripts]
-sql-autoloader = "sql_autoloader:main"
-
 [project.optional-dependencies]
 postgres = [
     "psycopg>=3.2.3",

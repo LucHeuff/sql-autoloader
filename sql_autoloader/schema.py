@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from functools import cached_property
-from typing import Annotated, Callable, Self, TypedDict
+from typing import Annotated, Self, TypedDict
 
 import networkx as nx
 from more_itertools import (
@@ -84,7 +85,7 @@ class Table(BaseModel):
         }
         prefix_columns = []
         for col in columns:
-            if not col in self:
+            if col not in self:
                 continue
             if col in self.prefix_column_map:
                 prefix_columns.append((col, col))
@@ -267,7 +268,7 @@ class Schema:
             TableDoesNotExistError: if table does not exist in schema.
 
         """
-        if not table_name in self.graph.nodes:
+        if table_name not in self.graph.nodes:
             message = f"table '{table_name}' does not appear in schema."
             raise TableDoesNotExistError(message)
         return self.graph.nodes[table_name]["table"]
@@ -294,14 +295,14 @@ class Schema:
         if "." in column_name:
             table_name, _ = column_name.split(".")
             table = self._get_table(table_name)
-            if not column_name in table:
+            if column_name not in table:
                 message = (
                     f"Columns '{column_name}' does not exist for {table_name}."
                 )
                 raise NoSuchColumnForTableError(message)
             return table.name
 
-        if not column_name in self._column_table_mapping:
+        if column_name not in self._column_table_mapping:
             message = f"No column with name '{column_name}' appears anywhere in the schema."
             raise NoSuchColumnInSchemaError(message)
 
@@ -536,7 +537,7 @@ class Schema:
         # constructing the join clause
         join_lines = [
             f"LEFT JOIN {table} {ref}"
-            for (table, ref) in zip(join_tables[1:], references)
+            for (table, ref) in zip(join_tables[1:], references, strict=False)
         ]
         join_clause = f"\nFROM {join_tables[0]}\n{'\n'.join(join_lines)}"
 
@@ -677,7 +678,7 @@ class Schema:
         references = [
             self.graph.get_edge_data(*edge)["reference"] for edge in edges
         ]
-        if not alias in unique(
+        if alias not in unique(
             [reference.from_key for reference in references]
         ):
             message = f"Alias '{alias}' does not appear anywhere in the schema for table '{table_name}'."
