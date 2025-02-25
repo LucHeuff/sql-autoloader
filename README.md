@@ -272,6 +272,7 @@ For example:
 with SQLiteConnector(credentials) as sqlite:
     sqlite.print_schema()
 ```
+> Note that the information is incomplete, as the `*Connector` is not aware of table and column constraints, or default values.
 
 ### `schema_is_empty`
 `schema_is_empty()` is a convenience function to check whether a schema exists in the database.
@@ -286,8 +287,6 @@ with SQLiteConnector(credentials) as sqlite:
         sqlite.update_schema()
 
 ```
-
-> Note that the information is incomplete, as the `*Connector` is not aware of table and column constraints, or default values.
 
 ## SQLiteConnector
 The `SQLiteConnector` wraps the `sql-autoloader` functionality around the `sqlite3` library.
