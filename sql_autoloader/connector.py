@@ -21,9 +21,7 @@ def invert(d: dict[str, str]) -> dict[str, str]:
     return {v: k for (k, v) in d.items()}
 
 
-def preprocess(
-    data: pl.DataFrame, columns: dict[str, str] | None
-) -> pl.DataFrame:
+def preprocess(data: pl.DataFrame, columns: dict[str, str] | None) -> pl.DataFrame:
     """Check if data contains nulls and rename columns.
 
     Args:
@@ -31,7 +29,7 @@ def preprocess(
         data: pl.DataFrame
         columns: (Optional) dictionary of {old_name: new_name}
 
-    Returns:
+    Returns
     -------
         renamed pl.DataFrame
 
@@ -41,9 +39,7 @@ def preprocess(
     return data.rename(columns)
 
 
-def postprocess(
-    data: pl.DataFrame, columns: dict[str, str] | None
-) -> pl.DataFrame:
+def postprocess(data: pl.DataFrame, columns: dict[str, str] | None) -> pl.DataFrame:
     """Undoes column renaming if required.
 
     Args:
@@ -51,7 +47,7 @@ def postprocess(
         data: pl.DataFrame
         columns: (Optional) dictionary of {old_name: new_name}
 
-    Returns:
+    Returns
     -------
         original pl.DataFrame
 
@@ -109,7 +105,7 @@ class DBConnector(ABC):
             table: to insert into
             columns: to insert values into
 
-        Returns:
+        Returns
         -------
             Valid insert query for this Connector
 
@@ -129,7 +125,7 @@ class DBConnector(ABC):
             alias: for the primary key
             columns: to read values from
 
-        Returns:
+        Returns
         -------
             Valid retrieve query for this Connector
 
@@ -223,7 +219,7 @@ class DBConnector(ABC):
             replace: whether non-id columns from provided list are to be dropped after joining
             allow_duplication: if rows are allowed to be duplicated when merging ids
 
-        Returns:
+        Returns
         -------
             data with ids from database added, or replacing original columns
 
@@ -235,9 +231,7 @@ class DBConnector(ABC):
             table, alias, data.columns
         )
 
-        query = self.get_retrieve_query(
-            table, primary_key, alias, common_columns
-        )
+        query = self.get_retrieve_query(table, primary_key, alias, common_columns)
         log_message = "Retrieving %s from %s using query:\n%s"
         logger.debug(log_message, common_columns, table, query)
 
@@ -245,9 +239,7 @@ class DBConnector(ABC):
         self.cursor.execute(query)
         db_fetch = self.cursor.fetchall()
 
-        data = merge_ids(
-            data, db_fetch, alias, allow_duplication=allow_duplication
-        )
+        data = merge_ids(data, db_fetch, alias, allow_duplication=allow_duplication)
 
         if replace:
             # Use table schema to determine which non_id columns can be dropped.
@@ -330,9 +322,9 @@ class DBConnector(ABC):
         db_rows = self.cursor.fetchall()
 
         assert len(db_rows) > 0, "Compare query yielded no results."
-        assert len(db_rows) >= len(
-            data
-        ), "Compare query yielded fewer rows than data."
+        assert len(db_rows) >= len(data), (
+            "Compare query yielded fewer rows than data."
+        )
 
         compare(data, db_rows, exact=exact)
 
@@ -374,7 +366,7 @@ class DBConnector(ABC):
                    the rows retrieved from the database in comparison. If False, only checks
                    if rows from data appear in rows from query.
 
-        Returns:
+        Returns
         -------
             pl.DataFrame including foreign keys
 
@@ -408,8 +400,6 @@ class DBConnector(ABC):
 
         if compare:
             logger.debug("Comparing...")
-            self.compare(
-                orig_data, query=compare_query, where=where, exact=exact
-            )
+            self.compare(orig_data, query=compare_query, where=where, exact=exact)
 
         return postprocess(data, columns)
