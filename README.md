@@ -55,7 +55,7 @@ This does mean that `sql-autoloader` needs to make assumptions.
     However, this makes algorithmically figuring out the order in which tables should be loaded much more difficult,
     so `sql-autoloader` requires all foreign keys that refer to the same primary key to have the same name. 
 
-> Note that `sql-autoloader` will automatically raise exceptions if these assumptions are not met.
+> ℹ️ `sql-autoloader` will automatically raise exceptions if these assumptions are not met.
 
 ## Validation
 By default, `sql-autoloader` will try to validate the loading operation by retrieving all the data it loaded
@@ -66,7 +66,7 @@ Automatically generating the comparison query comes with an additional assumptio
     This means there exists a single query consisting of multiple `JOIN` statements that reconstruct the original data.
     That also means there can be no isolated tables, or sets of isolated tables in the loading operation.
 
-> Note that this doesn't mean that all your tables need to be connected, this only needs to hold for the tables into which data are loaded.
+> ℹ️ This doesn't mean that all your tables need to be connected, this only needs to hold for the tables into which data are loaded.
 
 If your loading operation does match this assumption, you can either provide your own comparison query (through the `compare_query=` argument)
 or disable the validation entirely (by setting `compare=False`).
@@ -115,9 +115,7 @@ CREATE TABLE demo (
     name TEXT UNIQUE
 );
 ...
-
 """
-
 credentials = '<path_to_file>.db'
 
 with SQLiteConnector(credentials) as sqlite:
@@ -127,13 +125,12 @@ with SQLiteConnector(credentials) as sqlite:
    sqlite.load(data) 
 ```
 
-> Note
-> All connectors assume `data` to be a `polars.DataFrame`. If you are coming from `pandas` instead,
+> ⚠️ All connectors assume `data` to be a `polars.DataFrame`. If you are coming from `pandas` instead,
 > you can easily convert your `pandas.DataFrame` to a `polars.DataFrame` using:
-```
-import polars as pl
-polars_df = pl.from_pandas(pandas_df)
-```
+> ```
+> import polars as pl
+> polars_df = pl.from_pandas(pandas_df)
+> ```
 
 # Documentation
 
@@ -183,7 +180,7 @@ insert(
 
 As insertion is an operation on the database only, this method does not return anything.
 
-> Note that any columns that are present in `data` that are not relevant to `table` are simply ignored.
+> ℹ️ any columns that are present in `data` that are not relevant to `table` are simply ignored.
 
 ### `retrieve_ids`
 This methods retrieves primary keys from a single table and joins them to the provided data under the given alias.
@@ -206,7 +203,7 @@ retrieve_ids(
 
 This method will return a dataframe onto which the primary keys of `table` were joined, under the provided `alias`.
 
-> Note that any columns that are present in `data` that are not relevant to `table` are simply ignored.
+> ℹ️ any columns that are present in `data` that are not relevant to `table` are simply ignored.
 
 ### `insert_and_retrieve_ids`
 This is a convenience method that chains `insert()` and `retrieve_ids()` for the same table.
@@ -272,7 +269,7 @@ For example:
 with SQLiteConnector(credentials) as sqlite:
     sqlite.print_schema()
 ```
-> Note that the information is incomplete, as the `*Connector` is not aware of table and column constraints, or default values.
+> ⚠️ This information is incomplete, as the `*Connector` is not aware of table and column constraints, or default values.
 
 ### `schema_is_empty`
 `schema_is_empty()` is a convenience function to check whether a schema exists in the database.
@@ -300,7 +297,7 @@ SQLiteConnector(
 `allow_custom_dtypes` (Optional): enables custom datatypes, and can be used in combination with custom adapters and converters. For more information see the [sqlite3 documentation](https://docs.python.org/3/library/sqlite3.html#sqlite3-adapter-converter-recipes)
 
 The `SQLiteConnector.cursor` property exposes the `sqlite3.Cursor` used internally for manual use. See the [sqlite3 documentation on Cursors](https://docs.python.org/3/library/sqlite3.html#sqlite3.Cursor) for more information.
-> Note: the `SQLiteConnector` assumes that the cursor will be closed once the context manager exits. Closing the cursor prematurely will cause issues.
+> ⚠️ `SQLiteConnector` assumes that the cursor will be closed once the context manager exits. Closing the cursor prematurely will cause issues.
 
 ## PostgresConnector
 The `PostgresConnector` wraps the `sql-autoloader` functionality around the `psycopg` library.
@@ -312,7 +309,7 @@ PostgresConnector(
 `credentials`: a [connection string](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING) to a running PostgreSQL server\
 
 The `PostgresCursor.cursor` property exposes the `psycopg.Cursor` used internally for manual use. See the [psycopg documentation on Cursors](https://www.psycopg.org/psycopg3/docs/api/cursors.html) for more information.
-> Note: the `PostgresConnector` assumes that the cursor will be closed once the context manager exits. Closing the cursor prematurely will cause issues.
+> ⚠️ `PostgresConnector` assumes that the cursor will be closed once the context manager exits. Closing the cursor prematurely will cause issues.
 
 ## Troubleshooting
 Since the `load()` operation has a lot of moving parts, troubleshooting can be difficult.
