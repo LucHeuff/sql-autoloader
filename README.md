@@ -267,10 +267,24 @@ with SQLiteConnector("new.db") as sqlite:
 This is not intended as a replacement of the full SQL schema, but instead as a reference to quickly check if everything is in working order,
 or if you don't have access to the full SQL schema for some reason.
 
-for example:
+For example:
 ```
 with SQLiteConnector(credentials) as sqlite:
     sqlite.print_schema()
+```
+
+### `schema_is_empty`
+`schema_is_empty()` is a convenience function to check whether a schema exists in the database.
+This function makes checking whether database tables should be loaded a little bit easier.
+
+For example:
+```
+with SQLiteConnector(credentials) as sqlite:
+    # only creating tables if none exist yet
+    if sqlite.schema_is_empty():
+        sqlite.cursor.executescript(schema)
+        sqlite.update_schema()
+
 ```
 
 > Note that the information is incomplete, as the `*Connector` is not aware of table and column constraints, or default values.
