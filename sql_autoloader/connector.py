@@ -146,6 +146,10 @@ class DBConnector(ABC):
         """Retrieve schema from the database."""
         return Schema(self.fetch_schema)
 
+    def schema_is_empty(self) -> bool:
+        """Check whether database schema is empty."""
+        return self.schema.is_empty
+
     def update_schema(self) -> None:
         """Update schema from database manually.
 

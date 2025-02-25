@@ -23,7 +23,7 @@ def test_get_insert_query() -> None:
     """Test whether _get_insert_query() works as intended."""
     table = "fiets"
     columns = ["kleur", "zadel", "wielen"]
-    query = "INSERT OR IGNORE INTO fiets (kleur, zadel, wielen) VALUES (:kleur, :zadel, :wielen)"
+    query = "INSERT OR IGNORE INTO fiets (kleur, zadel, wielen) VALUES (:kleur, :zadel, :wielen)"  # noqa: E501
     assert _get_insert_query(table, columns) == query
 
 
@@ -38,6 +38,12 @@ def test_get_retrieve_query() -> None:
 
 
 # --- Integration tests
+
+
+def test_empty_schema() -> None:
+    """Test whether the connector correctly returns when schema is empty."""
+    with SQLiteConnector(":memory:") as sqlite:
+        assert sqlite.schema_is_empty()
 
 
 def test_basic_integration() -> None:
@@ -157,7 +163,9 @@ class SQLiteReference:
 
     def __str__(self) -> str:
         """Get SQL representation of reference."""
-        return f"{self.foreign_key} INTEGER REFERENCES {self.to_table} ({self.to_key})"
+        return (
+            f"{self.foreign_key} INTEGER REFERENCES {self.to_table} ({self.to_key})"
+        )
 
 
 @dataclass
@@ -217,7 +225,8 @@ def integration_strategy(draw: st.DrawFn) -> IntegrationStrategy:
         # need 1 primary key if the table has successors
         pk = 1 if len(successors) > 0 else draw(st.booleans())
 
-        # making sure there is at least one column in the table if there is no primary key
+        # making sure there is at least one column in the table
+        # if there is no primary key
         num_cols = max(1, pk + 1)
 
         sample_columns = draw(
@@ -240,9 +249,7 @@ def integration_strategy(draw: st.DrawFn) -> IntegrationStrategy:
                 for pred in predecessors
             ]
 
-        tables[table] = SQLiteTable(
-            table, primary_key, sample_columns, references
-        )
+        tables[table] = SQLiteTable(table, primary_key, sample_columns, references)
         # update list of columns to see if names are duplicate in the schema
         columns += sample_columns
 
@@ -260,7 +267,10 @@ def integration_strategy(draw: st.DrawFn) -> IntegrationStrategy:
     n = len(column_names)
     assert n > 0, "No columns were generated in simulation process."
     values = [str(val) for val in range(n * n_rows)]
-    rows = [dict(zip(column_names, _values)) for _values in batched(values, n)]
+    rows = [
+        dict(zip(column_names, _values, strict=True))
+        for _values in batched(values, n)
+    ]
 
     df = pl.DataFrame(rows)
 
@@ -282,9 +292,7 @@ def test_integration(strategy: IntegrationStrategy) -> None:
             # If there are no isolates, can test compare query generation
             if strategy.no_isolates:
                 sqlite.load(strategy.df, compare=True)
-                compare_query = sqlite.schema.get_compare_query(
-                    strategy.df.columns
-                )
+                compare_query = sqlite.schema.get_compare_query(strategy.df.columns)
                 sqlite.cursor.execute(compare_query)
                 db_data = pl.DataFrame(sqlite.cursor.fetchall())
 
