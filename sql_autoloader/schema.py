@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 from collections.abc import Callable
 from functools import cached_property
 from typing import Annotated, Self, TypedDict
@@ -44,12 +45,11 @@ class Table(BaseModel):
 
     @model_validator(mode="after")
     def verify_not_empty(self) -> Self:
-        """Validate that the Table is not empty (no columns, primary or foreign keys)."""
-        if (
-            len(self.columns) == 0
-            and not self.primary_key
-            and not self.foreign_keys
-        ):
+        """Validate that the Table is not empty.
+
+        (no columns, primary or foreign keys).
+        """
+        if len(self.columns) == 0 and not self.primary_key and not self.foreign_keys:
             message = f"{self!r} seems to be empty, what is it for?"
             raise InvalidTableError(message)
         return self
@@ -61,7 +61,7 @@ class Table(BaseModel):
         ----
                     columns: list of columns of interest
 
-        Returns:
+        Returns
         -------
                     columns that the list and this table have in common.
 
@@ -73,16 +73,15 @@ class Table(BaseModel):
 
         Args:
         ----
-            columns: list of columns that may appear in this table, which can be prefixed.
+            columns: list of columns that may appear in this table,
+                     which are allowed to have a prefix.
 
-        Returns:
+        Returns
         -------
            list of tuples of prefixed columns in format (prefixed, original)
 
         """
-        column_to_prefix_map = {
-            v: k for (k, v) in self.prefix_column_map.items()
-        }
+        column_to_prefix_map = {v: k for (k, v) in self.prefix_column_map.items()}
         prefix_columns = []
         for col in columns:
             if col not in self:
@@ -106,9 +105,7 @@ class Table(BaseModel):
     @cached_property
     def prefix_column_map(self) -> dict[str, str]:
         """Return mapping from prefixes to columns for this table."""
-        return {
-            f"{self.name}.{col}": col for col in self.columns_and_foreign_keys
-        }
+        return {f"{self.name}.{col}": col for col in self.columns_and_foreign_keys}
 
     def __contains__(self, column: str) -> bool:
         """Return whether column exist for this table.
@@ -119,7 +116,7 @@ class Table(BaseModel):
         ----
             column: name of column to check
 
-        Returns:
+        Returns
         -------
            boolean indicating if the column exists for this table.
 
@@ -136,7 +133,7 @@ class Table(BaseModel):
         return f"Table {self.name} (\n\t{cols}\n)"
 
 
-# Pydantic constraint for non empty string, defining separately for more readable code
+# Pydantic constraint for non empty string, for more readable code
 non_empty_string = StringConstraints(min_length=1, strip_whitespace=True)
 
 
@@ -159,7 +156,9 @@ class Reference(BaseModel):
 
     def __str__(self) -> str:
         """Return partial SQL string to join the two tables together."""
-        return f"ON {self.from_table}.{self.from_key} = {self.to_table}.{self.to_key}"
+        return (
+            f"ON {self.from_table}.{self.from_key} = {self.to_table}.{self.to_key}"
+        )
 
 
 class TableDict(TypedDict):
@@ -244,11 +243,12 @@ class Schema:
                 reference.to_table, reference.from_table, reference=reference
             )
 
-        # The resulting graph has to be a Directed Acyclic Graph for my algorithms to work.
+        # The resulting graph has to be a Directed Acyclic Graph
+        # for my algorithms to work.
         # As far as I am aware, all valid SQL database structures should be DAGs
-        assert nx.is_directed_acyclic_graph(
-            self.graph
-        ), "Provided schema is not a DAG."
+        assert nx.is_directed_acyclic_graph(self.graph), (
+            "Provided schema is not a DAG."
+        )
 
     # ---- Private methods
 
@@ -259,11 +259,11 @@ class Schema:
         ----
             table_name: of the desired table
 
-        Returns:
+        Returns
         -------
            corresponding Table object
 
-        Raises:
+        Raises
         ------
             TableDoesNotExistError: if table does not exist in schema.
 
@@ -278,17 +278,17 @@ class Schema:
 
         Args:
         ----
-            column_name: bare column name, or prefixed with desired table if ambiguous
+            column_name: bare column name, or with table prefix if ambiguous
 
-        Returns:
+        Returns
         -------
            name of the table that belongs to this column.
 
-        Raises:
+        Raises
         ------
-            NoSuchColumnForTableError: if the prefixed table doesn't have this column.
+            NoSuchColumnForTableError: if prefixed table doesn't have this column.
             ColumnIsAmbiguousError: if the column name appears on multiple columns.
-            NoSuchColumnInSchemaError: if the column name does not appear in the schema at all.
+            NoSuchColumnInSchemaError: if column does not appear in the schema.
 
         """
         # Splitting off table prefix if it exists.
@@ -296,9 +296,7 @@ class Schema:
             table_name, _ = column_name.split(".")
             table = self._get_table(table_name)
             if column_name not in table:
-                message = (
-                    f"Columns '{column_name}' does not exist for {table_name}."
-                )
+                message = f"Columns '{column_name}' does not exist for {table_name}."
                 raise NoSuchColumnForTableError(message)
             return table.name
 
@@ -323,7 +321,7 @@ class Schema:
             table_name: name of table to get mapping for
             columns: columns that might need to be remapped
 
-        Returns:
+        Returns
         -------
             mapping of prefixed columns to bare column names.
 
@@ -338,20 +336,18 @@ class Schema:
     def _get_relevant_tables(self, columns: list[str]) -> list[str]:
         """Get a list of tables that are relevant to this set of columns.
 
-        Searches through the graph for tables and their successors that can be loaded.
+        Searches through the graph for tables and their successors.
 
         Args:
         ----
             columns: list of columns to be loaded.
 
-        Returns:
+        Returns
         -------
            list of tables to load.
 
         """
-        tables = list(
-            unique(self._get_table_name_by_column(col) for col in columns)
-        )
+        tables = list(unique(self._get_table_name_by_column(col) for col in columns))
 
         for node in self._topological_sort:
             if node not in tables and all(
@@ -370,7 +366,7 @@ class Schema:
             table: under consideration
             columns: list of columns that are to be inserted or retrieved with
 
-        Raises:
+        Raises
         ------
             EmptyColumnListError: when list is empty
             ColumnsDoNotExistError: when none of the columns exist in the table.
@@ -401,7 +397,7 @@ class Schema:
         ----
             table_name: name of the desired table
 
-        Returns:
+        Returns
         -------
            list of columns that are not primary or foreign keys
 
@@ -421,7 +417,7 @@ class Schema:
             columns: list of columns to include in the compare query
             where: (Optional) WHERE clause to filter comparison results by
 
-        Returns:
+        Returns
         -------
             valid compare query
 
@@ -436,19 +432,13 @@ class Schema:
 
         # I cannot deal with comparing when isolated tables are involved, so throwing back to the user.
         if nx.number_of_isolates(subgraph) > 0:
-            isolated = [
-                nx.is_isolate(subgraph, node) for node in subgraph.nodes
-            ]
+            isolated = [nx.is_isolate(subgraph, node) for node in subgraph.nodes]
             message = f"Automatic compare query generation cannot handle any isolated tables, but '{isolated}' do not link to any other table when considering '{tables}'.\nEither provide a compare query yourself, make sure the data you are loading all relate to one another, or disable comparison if you do not care."
             raise IsolatedTablesError(message)
 
         # I also cannot deal with isolated subgraphs
         if (
-            len(
-                isolated_subgraps := list(
-                    nx.weakly_connected_components(subgraph)
-                )
-            )
+            len(isolated_subgraps := list(nx.weakly_connected_components(subgraph)))
             > 1
         ):
             message = f"Automatic compare query generation cannot handle isolated subgraphs, but found weakly connected components: '{isolated_subgraps}'"
@@ -465,8 +455,7 @@ class Schema:
             base_type=tuple,
         )
         select_aliases = [
-            f'{prefixed} as "{original}"'
-            for (prefixed, original) in select_columns
+            f'{prefixed} as "{original}"' for (prefixed, original) in select_columns
         ]
 
         select_clause = f"SELECT\n{',\n'.join(select_aliases)}"
@@ -499,9 +488,7 @@ class Schema:
                 # fetching the target table for the shortest path in which the most missing tables appear.
                 target = sorted(
                     table_paths,
-                    key=lambda t: sum(
-                        node not in path for node in table_paths[t]
-                    ),
+                    key=lambda t: sum(node not in path for node in table_paths[t]),
                     reverse=True,
                 )[0]
                 # finding where in the path this target (first) appears. Moving one to the left so the new path being added appears after the target.
@@ -516,9 +503,9 @@ class Schema:
                 path = list(unique_justseen(path))
 
         # making sure the loop above resulted in a valid path
-        assert nx.is_path(
-            undirected, path
-        ), "Adding missing tables resulted in an invalid path."
+        assert nx.is_path(undirected, path), (
+            "Adding missing tables resulted in an invalid path."
+        )
 
         # retrieving references based on the path, and removing duplicates
         references = list(
@@ -530,9 +517,9 @@ class Schema:
         # removing duplicate tables from path
         join_tables = list(unique_everseen(path))
         # join_tables should be one longer than references
-        assert (
-            len(join_tables) == len(references) + 1
-        ), "join_tables not one longer than references."
+        assert len(join_tables) == len(references) + 1, (
+            "join_tables not one longer than references."
+        )
 
         # constructing the join clause
         join_lines = [
@@ -550,7 +537,7 @@ class Schema:
         ----
             columns: that are to be inserted
 
-        Returns:
+        Returns
         -------
             insert_and_retrieve, insert
             with:
@@ -587,12 +574,11 @@ class Schema:
                 edge_attributes = [
                     attr
                     for child in successors
-                    if (attr := self.graph.get_edge_data(table, child))
-                    is not None
+                    if (attr := self.graph.get_edge_data(table, child)) is not None
                 ]
-                assert (
-                    len(edge_attributes) > 0
-                ), f"No attributes on edges for table '{table}' and successors '{successors}'."
+                assert len(edge_attributes) > 0, (
+                    f"No attributes on edges for table '{table}' and successors '{successors}'."
+                )
 
                 # Find how the reference refers to the id, if a reference was found
                 aliases = [
@@ -600,9 +586,9 @@ class Schema:
                     for attr in edge_attributes
                     if (ref := attr.get("reference", None)) is not None
                 ]
-                assert (
-                    len(aliases) > 0
-                ), f"No aliases were found, despite table '{table}' having a primary key and successors '{successors}'."
+                assert len(aliases) > 0, (
+                    f"No aliases were found, despite table '{table}' having a primary key and successors '{successors}'."
+                )
 
                 # It is possible that tables use different aliases. Currently, this code cannot handle that situation
                 # so raises an exception
@@ -630,7 +616,7 @@ class Schema:
             table_name: name of table to be inserted into
             columns: list of columns in dataframe
 
-        Returns:
+        Returns
         -------
             list of columns that table and data have in common.
 
@@ -653,12 +639,12 @@ class Schema:
             alias: of the primary key of the table
             columns: list of columns in dataframe
 
-        Raises:
+        Raises
         ------
             NoPrimaryKeyError: when the table does not have a primary key
             AliasDoesNotExistError: when the alias does not appear in the schema
 
-        Returns:
+        Returns
         -------
             list of columns that table and data have in common.
 
@@ -671,16 +657,12 @@ class Schema:
 
         # checking if alias appears in the schema
         edges = self.graph.edges(table_name)
-        assert (
-            len(edges) > 0
-        ), f"Table '{table_name}' has a primary key but is not connected to any edges."
+        assert len(edges) > 0, (
+            f"Table '{table_name}' has a primary key but is not connected to any edges."
+        )
 
-        references = [
-            self.graph.get_edge_data(*edge)["reference"] for edge in edges
-        ]
-        if alias not in unique(
-            [reference.from_key for reference in references]
-        ):
+        references = [self.graph.get_edge_data(*edge)["reference"] for edge in edges]
+        if alias not in unique([reference.from_key for reference in references]):
             message = f"Alias '{alias}' does not appear anywhere in the schema for table '{table_name}'."
             raise AliasDoesNotExistError(message)
 

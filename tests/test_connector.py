@@ -27,13 +27,13 @@ def processing_strategy(draw: st.DrawFn) -> ProcessingStrategy:
     else:
         n_cols = len(df.columns)
         aliases = draw(names_generator(min_size=n_cols, max_size=n_cols))
-        columns = dict(zip(df.columns, aliases))
+        columns = dict(zip(df.columns, aliases, strict=True))
     return ProcessingStrategy(df, columns)
 
 
 @given(strategy=processing_strategy())
 def test_processing(strategy: ProcessingStrategy) -> None:
-    """Test whether preprocessing followed by postprocessing restores column names."""
+    """Test whether preprocessing followed by postprocessing restores column names."""  # noqa: E501
     pre = preprocess(strategy.df, strategy.columns)
     post = postprocess(pre, strategy.columns)
     assert strategy.df.columns == post.columns
