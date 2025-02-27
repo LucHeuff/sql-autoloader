@@ -46,7 +46,7 @@ This does mean that `sql-autoloader` needs to make assumptions.
     This allows `sql-autoloader` to properly link primary and foreign keys.
     This does mean that every foreign key reference should end up with a primary key.
     In other words, these values cannot be missing. `sql-autoloader` will perform a check that this is the case.
-    > If this check fails, this usually points to a design assumption being violated. This might mean your
+    > ℹ️  If this check fails, this usually points to a design assumption being violated. This might mean your
     > data is incorrect, or your assumptions about the data are.
 - The database schema is defined prior to loading.
     `sql-autoloader` reads the schema from the database, and tries to match this with the data you want to load.
