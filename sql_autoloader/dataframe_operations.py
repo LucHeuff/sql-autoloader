@@ -4,7 +4,6 @@ from polars.exceptions import InvalidOperationError
 from sql_autoloader.exceptions import (
     CompareMissingRowsError,
     CompareNoExactMatchError,
-    InvalidDataframeError,
     MatchDatatypesError,
     MissingKeysAfterMergeError,
 )
@@ -15,23 +14,6 @@ def has_nulls(df: pl.DataFrame) -> bool:
     if len(df) == 0:
         return True
     return bool(df.null_count().sum_horizontal().item())
-
-
-def check_nulls(df: pl.DataFrame) -> None:
-    """Check if dataframe contains null values.
-
-    Args:
-    ----
-        df: pl.DataFrame to check for nulls
-
-    Raises
-    ------
-        InvalidDataframeError: if the dataframe contains null values.
-
-    """
-    if has_nulls(df):
-        message = "Dataframe cannot contain missing values."
-        raise InvalidDataframeError(message)
 
 
 def compare(df: pl.DataFrame, db_rows: list[dict], *, exact: bool = True) -> None:
@@ -149,7 +131,7 @@ def merge_ids(
     # taking the columns the two datasets have in common as join columns
     on_columns = list(set(df.columns) & set(db_data.columns))
 
-    df = df.join(db_data, on=on_columns, how="left")
+    df = df.join(db_data, on=on_columns, how="left", join_nulls=True)
 
     # sanity checks: dataset should not shrink and rows should not be duplicated
     assert len(df) >= orig_len, "Rows were lost when joining on ids."
@@ -160,6 +142,7 @@ def merge_ids(
         "Rows were duplicated when joining on ids."
     )
 
+    # Alias should not return empty
     if has_nulls(df.select(alias)):
         rows_with_missings = df.filter(pl.any_horizontal(alias).is_null())
         message = "Some id's were returned as NA:\n" + str(rows_with_missings)
