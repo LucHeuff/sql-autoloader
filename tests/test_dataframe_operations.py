@@ -43,20 +43,21 @@ def has_nulls_strategy(draw: st.DrawFn) -> HasNullsStrategy:
     if not has_nulls:
         df = draw(dataframes(min_size=1, allow_null=False))
     else:
-        # Forcing nulls since dataframes don't allow for that. Still generating random columns and dtypes
+        # Forcing nulls since dataframes don't allow for that.
+        # Still generating random columns and dtypes
         columns = draw(names_generator(min_size=1, max_size=5))
         d_types = draw(
             st.lists(dtypes(), min_size=len(columns), max_size=len(columns))
         )
         df = pl.DataFrame({col: None for col in columns}).cast(
-            dict(zip(columns, d_types))
+            dict(zip(columns, d_types, strict=True))
         )
 
     return HasNullsStrategy(df, has_nulls)
 
 
 def test_basic_has_nulls() -> None:
-    """Basic test whether has_nulls() correctly detects the presence of null values."""
+    """Basic test whether has_nulls() correctly detects the presence of null values."""  # noqa: E501
     no_nulls = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     nulls = pl.DataFrame({"a": [1, 2, None], "b": [4, None, 6]})
     all_nulls = pl.DataFrame({"a": [None, None, None], "b": [None, None, None]})
@@ -68,7 +69,7 @@ def test_basic_has_nulls() -> None:
 
 @given(strategy=has_nulls_strategy())
 def test_has_nulls(strategy: HasNullsStrategy) -> None:
-    """Simulation test whether has_nulls() correctly detects tht presence of null values."""
+    """Simulation test whether has_nulls() correctly detects tht presence of null values."""  # noqa: E501
     assert has_nulls(strategy.df) == strategy.has_nulls
 
 
@@ -77,7 +78,7 @@ def test_basic_check_nulls() -> None:
     no_nulls = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     nulls = pl.DataFrame({"a": [1, 2, None], "b": [4, None, 6]})
 
-    assert check_nulls(no_nulls) == None
+    assert check_nulls(no_nulls) is None
     with pytest.raises(InvalidDataframeError):
         check_nulls(nulls)
 
@@ -89,7 +90,7 @@ def test_check_nulls(strategy: HasNullsStrategy) -> None:
         with pytest.raises(InvalidDataframeError):
             check_nulls(strategy.df)
     else:
-        assert check_nulls(strategy.df) == None
+        assert check_nulls(strategy.df) is None
 
 
 # ---- Testing compare()
@@ -113,7 +114,7 @@ def rows_generator(draw: st.DrawFn, min_rows: int = 1) -> GeneratedRows:
         draw: hypothesis draw function
         min_rows: minimum number of rows
 
-    Returns:
+    Returns
     -------
         GeneratedRows
 
@@ -122,7 +123,9 @@ def rows_generator(draw: st.DrawFn, min_rows: int = 1) -> GeneratedRows:
     n = len(columns)
     n_rows = draw(st.integers(min_rows, 5))
     values = list(range(n * n_rows))
-    rows = [dict(zip(columns, _values)) for _values in batched(values, n)]
+    rows = [
+        dict(zip(columns, _values, strict=True)) for _values in batched(values, n)
+    ]
     return GeneratedRows(rows, columns, pl.DataFrame(rows))
 
 
@@ -213,14 +216,13 @@ class GetRowsStrategy:
 
 @st.composite
 def get_rows_strategy(draw: st.DrawFn) -> GetRowsStrategy:
-    """Generate a df, its rows, its columns and a subselection of columns and the accompanying rows."""
+    """Generate a df, its rows, its columns and a subselection of columns and the accompanying rows."""  # noqa: E501
     gen_rows = draw(rows_generator())
 
     sub_columns = gen_rows.columns[0:2]
 
     sub_rows = [
-        {k: v for (k, v) in row.items() if k in sub_columns}
-        for row in gen_rows.rows
+        {k: v for (k, v) in row.items() if k in sub_columns} for row in gen_rows.rows
     ]
     return GetRowsStrategy(
         gen_rows.df, gen_rows.columns, sub_columns, gen_rows.rows, sub_rows
@@ -240,7 +242,8 @@ def test_basic_get_rows() -> None:
 @given(strategy=get_rows_strategy())
 def test_get_rows(strategy: GetRowsStrategy) -> None:
     """Test of get_rows()."""
-    # Note: I don't care about the order in which rows appear, as long as they are there.
+    # Note: I don't care about the order in which rows appear,
+    # as long as they are there.
     assert all(
         row in get_rows(strategy.df, strategy.columns) for row in strategy.rows
     )
@@ -265,9 +268,7 @@ class MatchDTypesStrategy:
 def match_dtypes_strategy(draw: st.DrawFn) -> MatchDTypesStrategy:
     """Generate a dataframe and rows to test match_dtypes()."""
     match_error = draw(st.booleans())
-    df = draw(
-        dataframes(min_size=1, allow_null=False, allowed_dtypes=[pl.Float32])
-    )
+    df = draw(dataframes(min_size=1, allow_null=False, allowed_dtypes=[pl.Float32]))
     match_columns = draw(subselection(df.columns))
     if match_error:
         rows = [{col: col for col in match_columns}]
@@ -394,9 +395,7 @@ def test_basic_merge_ids() -> None:
     )
 
     out = merge_ids(df, db_fetch, alias)
-    assert_frame_equal(
-        out_df, out, check_column_order=False, check_row_order=False
-    )
+    assert_frame_equal(out_df, out, check_column_order=False, check_row_order=False)
 
     # testing allow_duplication=False
     with pytest.raises(AssertionError):
@@ -420,7 +419,8 @@ def test_basic_merge_ids() -> None:
 @given(strategy=merge_ids_strategy())
 def test_merge_ids(strategy: MergeIDsStrategy) -> None:
     """Simulation test of merge_ids()."""
-    # This test fails on a AssertionError: Rows were duplicated when joining on ids that I cannot reproduce manually.
+    # This test fails on a AssertionError:
+    # Rows were duplicated when joining on ids that I cannot reproduce manually.
     # So maybe flaky test, maybe time to make the test a lot stricter
     if strategy.missing_keys:
         with pytest.raises(MissingKeysAfterMergeError):
