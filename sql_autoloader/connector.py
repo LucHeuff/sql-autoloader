@@ -1,11 +1,10 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Protocol, Self
+from typing import Protocol, Self
 
 import polars as pl
 
 from sql_autoloader.dataframe_operations import (
-    check_nulls,
     compare,
     get_rows,
     merge_ids,
@@ -34,7 +33,6 @@ def preprocess(data: pl.DataFrame, columns: dict[str, str] | None) -> pl.DataFra
         renamed pl.DataFrame
 
     """
-    check_nulls(data)
     columns = {} if columns is None else columns
     return data.rename(columns)
 
@@ -173,7 +171,8 @@ class DBConnector(ABC):
         ----
             data: pl.DataFrame containing the data that needs to be inserted.
             table: name of the table to insert into
-            columns: (Optional) dictionary linking column names in data with column names in dataframe
+            columns: (Optional) dictionary linking column names in data
+                     to column names in dataframe.
                      Example {data_name: db_name, ...}
                      If left empty, will assume that column names to insert
                      from data match column names in the database
@@ -209,14 +208,16 @@ class DBConnector(ABC):
 
         Args:
         ----
-            data: pl.DataFrame containing the data for which ids need to be retrieved and joined
+            data: pl.DataFrame for which ids need to be retrieved and joined
             table: table to retrieve ids from
             alias: of the primary key of table
-            columns: (Optional) dictionary linking column names in data with column names in dataframe
+            columns: (Optional) dictionary linking column names in data
+                     with column names in dataframe.
                      Example {data_name: db_name, ...}
                      If left empty, will assume that column names to retrieve ids on
                      from data match column names in the database
-            replace: whether non-id columns from provided list are to be dropped after joining
+            replace: whether non-id columns from provided list are to be
+                     dropped after joining.
             allow_duplication: if rows are allowed to be duplicated when merging ids
 
         Returns
@@ -259,14 +260,16 @@ class DBConnector(ABC):
     ) -> pl.DataFrame:
         """Insert data into database and retrieve ids to join them to data.
 
-            data: pl.DataFrame containing the data for which ids need to be retrieved and joined
+            data: pl.DataFrame for which ids need to be retrieved and joined
             table: table to retrieve ids from
             alias: of the primary key of table
-            columns: (Optional) dictionary linking column names in data with column names in dataframe
+            columns: (Optional) dictionary linking column names in data
+                     to column names in dataframe.
                      Example {data_name: db_name, ...}
                      If left empty, will assume that column names to retrieve ids on
                      from data match column names in the database
-            replace: whether non-id columns from provided list are to be dropped after joining
+            replace: whether non-id columns from provided list are to be
+                     dropped after joining.
             allow_duplication: if rows are allowed to be duplicated when merging ids
 
         Returns
@@ -300,10 +303,11 @@ class DBConnector(ABC):
         ----
             data: pl.DataFrame containing data to be compared to
             query: valid SQL query to retrieve data to compare to.
-            columns: (Optional) dictionary linking column names in data with column names in dataframe
+            columns: (Optional) dictionary linking column names in data
+                     to column names in dataframe.
                      Example {data_name: db_name, ...}
             where: (Optional) SQL WHERE clause to filter comparison data with.
-                   NOTE: please always prefix the tables for columns you are conditioning on.
+            NOTE: Always prefix the tables for columns you are conditioning on.
             exact: (Optional) whether all the rows in data must match all
                    the rows retrieved from the database. If False, only checks
                    if rows from data appear in rows from query.
@@ -347,24 +351,27 @@ class DBConnector(ABC):
         Args:
         ----
             data: pl.DataFrame containing data to be inserted into the database.
-            columns: (Optional) translation of columns in data to column names in database.
+            columns: (Optional) mapping of columns in data to columns in database.
                      Dictionary of format {data_name: db_name}.
                      If the same column name appears multiple times in the database,
-                     prefix the column name with the desired table, eg. <table>.<column_name>
-            compare: Whether a comparison needs to be preformed after loading has completed.
-                     This tends to be flaky, so this allows you to turn it off.
-            compare_query: (Optional) valid SQL query to retrieve data from the database to compare against.
-                            Ignored if compare == False, automatically generated when compare == True and none is provided.
-                            This might break if you have a complicated database model.
+                     prefix the column name with the desired table,
+                     eg. <table>.<column_name>
+            compare: Whether a comparison needs to be preformed after loading.
+                     This can sometimes be flaky, so this allows you to turn it off.
+            compare_query: (Optional) valid SQL query to retrieve data
+                           from the database to compare against.
+                   Ignored if compare == False,
+                   automatically generated when compare == True and none is provided.
+                   This might break if you have a complicated database model.
             replace: (Optional) whether columns can be replaced when retrieving ids.
                      If False, id columns are concatenated.
-            allow_duplication: (Optional) whether joining on ids from the database can result in
-                                rows being duplicated.
+            allow_duplication: (Optional) whether to allow rows to be duplicated
+                                when joining on ids from the database.
             where: (Optional) SQL WHERE clause to filter comparison data with.
-                   NOTE: please always prefix the tables for columns you are conditioning on.
-            exact: (Optional) whether all the rows in data must match all
-                   the rows retrieved from the database in comparison. If False, only checks
-                   if rows from data appear in rows from query.
+               NOTE: always prefix the tables for columns you are conditioning on.
+            exact: (Optional) whether all the rows in data must match all rows
+                   retrieved from the database in comparison.
+                   If False, only checks if rows from data appear in rows from query.
 
         Returns
         -------

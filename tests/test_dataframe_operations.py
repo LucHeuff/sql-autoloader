@@ -9,7 +9,6 @@ from polars.testing import assert_frame_equal
 from polars.testing.parametric import dataframes, dtypes
 
 from sql_autoloader.dataframe_operations import (
-    check_nulls,
     compare,
     get_rows,
     has_nulls,
@@ -19,13 +18,12 @@ from sql_autoloader.dataframe_operations import (
 from sql_autoloader.exceptions import (
     CompareMissingRowsError,
     CompareNoExactMatchError,
-    InvalidDataframeError,
     MatchDatatypesError,
     MissingKeysAfterMergeError,
 )
 from tests.generators import name_generator, names_generator, subselection
 
-# ---- Testing has_nulls() and check_nulls()
+# ---- Testing has_nulls()
 
 
 @dataclass
@@ -69,28 +67,8 @@ def test_basic_has_nulls() -> None:
 
 @given(strategy=has_nulls_strategy())
 def test_has_nulls(strategy: HasNullsStrategy) -> None:
-    """Simulation test whether has_nulls() correctly detects the presence of null values."""  # noqa: E501
+    """Simulation test whether has_nulls() correctly detects tht presence of null values."""  # noqa: E501
     assert has_nulls(strategy.df) == strategy.has_nulls
-
-
-def test_basic_check_nulls() -> None:
-    """Basic test whether check_nulls() raises an exception when it should."""
-    no_nulls = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    nulls = pl.DataFrame({"a": [1, 2, None], "b": [4, None, 6]})
-
-    assert check_nulls(no_nulls) is None
-    with pytest.raises(InvalidDataframeError):
-        check_nulls(nulls)
-
-
-@given(strategy=has_nulls_strategy())
-def test_check_nulls(strategy: HasNullsStrategy) -> None:
-    """Simulation test whether check_nulls() raises an exception when it should."""
-    if strategy.has_nulls:
-        with pytest.raises(InvalidDataframeError):
-            check_nulls(strategy.df)
-    else:
-        assert check_nulls(strategy.df) is None
 
 
 # ---- Testing compare()
@@ -417,17 +395,16 @@ def test_basic_merge_ids() -> None:
 
 
 def test_basic_merge_ids_missings() -> None:
-    """Basic test of merge_ids() with missing values."""
+    """Basic test of merging where some of the data are missing."""
     alias = "a_id"
-    df = pl.DataFrame({"a": ["A", "B", "C"]})
+    df = pl.DataFrame({"a": ["A", "B", "C"], "b": [1, 2, None]})
     db_fetch = [
         {"a_id": 1, "a": "A", "b": 1},
-        {"a_id": 2, "a": "B", "b": 1},
-        {"a_id": 3, "a": None, "b": 1},
+        {"a_id": 2, "a": "B", "b": 2},
         {"a_id": 3, "a": "C", "b": None},
     ]
     out_df = pl.DataFrame(
-        {"a": ["A", "B", None, "C"], "a_id": [1, 2, 3, 3], "b": [1, 1, 1, None]}
+        {"a": ["A", "B", "C"], "a_id": [1, 2, 3], "b": [1, 2, None]}
     )
     out = merge_ids(df, db_fetch, alias)
     assert_frame_equal(out_df, out, check_column_order=False, check_row_order=False)

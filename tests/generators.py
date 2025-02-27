@@ -1,4 +1,5 @@
-"""File containing generator functions that can be used to compose testing strategies."""
+"""File containing generator functions to be used to compose testing strategies."""
+
 import string
 
 import hypothesis.strategies as st
@@ -38,7 +39,7 @@ def names_generator(
         min_size: miniumum size of names
         max_size: maximum size of names
 
-    Returns:
+    Returns
     -------
        list of random names.
 
@@ -67,7 +68,7 @@ def subselection(
         max_size: (Optional) maximum number of items to draw.
                   If left empty, draws at most n-1 items.
 
-    Returns:
+    Returns
     -------
        list of unique random items subsampled from input items.
 
@@ -96,9 +97,10 @@ def dag_generator(
     ----
         draw: hypothesis draw function
         nodes: names of nodes in the graph
-        no_isolates: (Optional) whether isolated nodes are allowable. Defaults to False.
+        no_isolates: (Optional) whether isolated nodes are allowable.
+                     Defaults to False.
 
-    Returns:
+    Returns
     -------
        Random nx.DiGraph that is a DAG.
 
@@ -110,7 +112,7 @@ def dag_generator(
     adj_matrix = np.tril(
         draw(arrays(np.int32, shape, elements=st.integers(0, 1))), k=-1
     )
-    graph = nx.from_numpy_array(  # type: ignore
+    graph = nx.from_numpy_array(  # pyright: ignore[reportCallIssue]
         adj_matrix, create_using=nx.DiGraph, nodelist=nodes
     )
     # sanity check whether this is a DAG

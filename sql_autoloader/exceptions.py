@@ -1,12 +1,9 @@
+# ruff: noqa: E501
 class SQLAutoloaderError(Exception):
     """Base class for exceptions in this package."""
 
 
 # ---- Errors in dataframe operations
-class InvalidDataframeError(SQLAutoloaderError):
-    """Raised when the dataframe provided is invalid."""
-
-
 class MissingKeysAfterMergeError(SQLAutoloaderError):
     """Raised when merging data from the db results in missing values in id columns."""
 
@@ -28,8 +25,8 @@ class SchemaError(SQLAutoloaderError):
     """Raised when an error occurs when using the Schema."""
 
 
-class EmptySchemaError(SchemaError):
-    """Raised when a schema required, but it is empty."""
+class EmptySchemaError(SQLAutoloaderError):
+    """Raised when the schema is empty when it shouldn't be."""
 
 
 class TableDoesNotExistError(SchemaError):

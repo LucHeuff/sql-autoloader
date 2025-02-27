@@ -153,6 +153,57 @@ def test_basic_integration() -> None:
         )
 
 
+def test_missing_integration() -> None:
+    """Basic test of whether SQLiteConnector works with missing values."""
+    schema = """
+    CREATE TABLE a (id INTEGER PRIMARY KEY, a_num TEXT UNIQUE NOT NULL);
+
+    CREATE TABLE b (
+        a_id INTEGER REFERENCES a (id),
+        b_num TEXT NOT NULL,
+        UNIQUE (a_id, b_num)
+    );
+
+    CREATE TABLE c (
+        a_id INTEGER REFERENCES a (id),
+        naam TEXT NOT NULL,
+        UNIQUE (a_id, naam)
+    );
+    """
+
+    query = """
+    SELECT
+        a.a_num as a_num,
+        b.b_num as b_num,
+        c.naam as naam
+    FROM
+        a
+        LEFT JOIN b ON b.a_id = a.id
+        LEFT JOIN c on c.a_id = a.id
+    """
+
+    data = pl.DataFrame(
+        {
+            "a_num": ["A1", "A2", "A3", "A4", "A5"],
+            "b_num": ["B1", "B3", "B4", None, None],
+            "naam": ["ab1", "ab3", None, "ab4", None],
+        }
+    )
+
+    with SQLiteConnector(":memory:") as sqlite:
+        sqlite.cursor.executescript(schema)
+        sqlite.update_schema()
+        sqlite.load(data)
+
+        # testing whether the correct data is returned when running a query
+        sqlite.cursor.execute(query)
+        db_data = pl.DataFrame(sqlite.cursor.fetchall())
+
+    assert_frame_equal(
+        data, db_data, check_row_order=False, check_column_order=False
+    )
+
+
 @dataclass
 class SQLiteReference:
     """Stores a SQLite reference."""

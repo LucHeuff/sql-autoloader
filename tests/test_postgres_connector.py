@@ -11,11 +11,12 @@ from sql_autoloader.postgres.postgres_connector import (
 
 CONNECT_STRING = "postgresql://test:test@localhost/test"
 
+
 def test_get_insert_query() -> None:
     """Test whether _get_insert_query() works as intended."""
     table = "fiets"
     columns = ["kleur", "zadel", "wielen"]
-    query = "INSERT INTO fiets (kleur, zadel, wielen) VALUES (%(kleur)s, %(zadel)s, %(wielen)s) ON CONFLICT DO NOTHING"
+    query = "INSERT INTO fiets (kleur, zadel, wielen) VALUES (%(kleur)s, %(zadel)s, %(wielen)s) ON CONFLICT DO NOTHING"  # noqa: E501
     assert _get_insert_query(table, columns) == query
 
 
@@ -30,6 +31,8 @@ def test_get_retrieve_query() -> None:
 
 
 # --- Integration tests
+
+# NOTE: This will fail when Postgres is not installed on the current machine.
 
 
 def test_basic_integration() -> None:

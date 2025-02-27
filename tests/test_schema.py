@@ -1,11 +1,9 @@
 # ruff: noqa: SLF001
 from dataclasses import dataclass
-from pprint import pp
 
 import hypothesis.strategies as st
 import pytest
 from hypothesis import given
-from networkx import has_path
 
 from sql_autoloader.exceptions import (
     AliasDoesNotExistError,
@@ -104,9 +102,7 @@ def test_basic_table() -> None:
         ("test.two", "test.two"),
     ]
     # Testing __str__
-    assert (
-        str(table) == "Table test (\n\tid\n\tone_id\n\ttwo_id\n\tone\n\ttwo\n)"
-    )
+    assert str(table) == "Table test (\n\tid\n\tone_id\n\ttwo_id\n\tone\n\ttwo\n)"
 
 
 def test_empty_table() -> None:
@@ -285,7 +281,7 @@ def test_schema() -> None:
     schema = Schema(get_schema)
 
     # --- Testing schema.is_empty
-    assert schema.is_empty == False
+    assert not schema.is_empty
 
     # --- Testing Schema.get_columns
 
@@ -315,7 +311,7 @@ def test_schema() -> None:
     mapping = {}
     for d in tables:
         for col in d["columns"]:
-            if not col in mapping:
+            if col not in mapping:
                 mapping[col] = [d["name"]]
             else:
                 mapping[col] += [d["name"]]
@@ -324,7 +320,7 @@ def test_schema() -> None:
 
     # --- Testing schema._get_table_by_column
 
-    # test if exception is raised when prefixed column does not exist for table when prefixed
+    # test if exception is raised when prefixed column does not exist for table
     with pytest.raises(NoSuchColumnForTableError):
         schema._get_table_name_by_column("eigenaar.fiets")
     # test if exception is raised when non-prefixed column does not exist in schema
@@ -392,7 +388,8 @@ def test_schema() -> None:
     # test if exception is raised for nonexisting columns
     with pytest.raises(ColumnsDoNotExistOnTableError):
         schema.parse_retrieve("eigenaar", "eigenaar_id", ["fiets", "trein"])
-    # test if exception is raised when trying to retrieve from a table without a primary key
+    # test if exception is raised when trying to retrieve from a table
+    # that doesn't have a primary key
     with pytest.raises(NoPrimaryKeyError):
         schema.parse_retrieve("aankoop", "aankoop_id", ["datum"])
         # # test if exception is raised for nonexisting foreign key alias
@@ -462,7 +459,7 @@ def test_schema() -> None:
         "dealer.naam",
         "datum",
     ]
-    compare_query = """SELECT\naankoop.datum as "datum",\ndealer.naam as "dealer.naam",\neigenaar.naam as "eigenaar.naam",\nmerk.naam as "merk.naam",\nvoertuig_type.naam as "voertuig_type.naam"\nFROM voertuig_type\nLEFT JOIN voertuig ON voertuig.type_id = voertuig_type.id\nLEFT JOIN merk ON voertuig.merk_id = merk.id\nLEFT JOIN merk_dealer ON merk_dealer.merk_id = merk.id\nLEFT JOIN dealer ON merk_dealer.dealer_id = dealer.id\nLEFT JOIN aankoop ON aankoop.voertuig_id = voertuig.id\nLEFT JOIN voertuig_eigenaar ON voertuig_eigenaar.voertuig_id = voertuig.id\nLEFT JOIN eigenaar ON voertuig_eigenaar.eigenaar_id = eigenaar.id"""
+    compare_query = """SELECT\naankoop.datum as "datum",\ndealer.naam as "dealer.naam",\neigenaar.naam as "eigenaar.naam",\nmerk.naam as "merk.naam",\nvoertuig_type.naam as "voertuig_type.naam"\nFROM voertuig_type\nLEFT JOIN voertuig ON voertuig.type_id = voertuig_type.id\nLEFT JOIN merk ON voertuig.merk_id = merk.id\nLEFT JOIN merk_dealer ON merk_dealer.merk_id = merk.id\nLEFT JOIN dealer ON merk_dealer.dealer_id = dealer.id\nLEFT JOIN aankoop ON aankoop.voertuig_id = voertuig.id\nLEFT JOIN voertuig_eigenaar ON voertuig_eigenaar.voertuig_id = voertuig.id\nLEFT JOIN eigenaar ON voertuig_eigenaar.eigenaar_id = eigenaar.id"""  # noqa: E501
 
     assert schema.get_compare_query(columns) == compare_query
 
@@ -475,6 +472,6 @@ def test_empty_schema() -> None:
 
     schema = Schema(empty_schema)
 
-    assert schema.is_empty == True
+    assert schema.is_empty
     with pytest.raises(EmptySchemaError):
         schema.check_schema_not_empty()

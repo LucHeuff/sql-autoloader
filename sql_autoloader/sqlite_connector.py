@@ -15,19 +15,17 @@ def _get_insert_query(table: str, columns: list[str]) -> str:
         table: to insert into
         columns: to insert values into
 
-    Returns:
+    Returns
     -------
         valid insert query
 
     """
     columns_section = ", ".join(columns)
     values_section = ", ".join([f":{col}" for col in columns])
-    return f"INSERT OR IGNORE INTO {table} ({columns_section}) VALUES ({values_section})"
+    return f"INSERT OR IGNORE INTO {table} ({columns_section}) VALUES ({values_section})"  # noqa: E501
 
 
-def _get_retrieve_query(
-    table: str, key: str, alias: str, columns: list[str]
-) -> str:
+def _get_retrieve_query(table: str, key: str, alias: str, columns: list[str]) -> str:
     """Get a retrieve query appropriate for a SQLite database.
 
     Args:
@@ -37,7 +35,7 @@ def _get_retrieve_query(
         alias: for the primary key
         columns: to read values from
 
-    Returns:
+    Returns
     -------
         valid retrieve query
 
@@ -54,13 +52,13 @@ def _dict_row(cursor: sqlite3.Cursor, row: tuple) -> dict:
         cursor: SQLite cursor
         row: data row output
 
-    Returns:
+    Returns
     -------
         data in dictionary format
 
     """
     r = sqlite3.Row(cursor, row)
-    return dict(zip(r.keys(), tuple(r)))
+    return dict(zip(r.keys(), tuple(r), strict=False))
 
 
 # ---- functions for fetching schema information from the database
@@ -89,7 +87,7 @@ def _fetch_schema(
         FROM
           pragma_table_info ('{table}') AS info
           LEFT JOIN pragma_foreign_key_list ('{table}') AS foreign_keys ON foreign_keys."from" = info.name
-        """
+        """  # noqa: E501
         cursor.execute(query)
         column_info = cursor.fetchall()
 
@@ -116,9 +114,9 @@ def _fetch_schema(
 
         assert len(primary_key) <= 1, "Cannot have more than 1 primary key"
         primary_key = primary_key[0] if len(primary_key) == 1 else ""
-        assert (
-            foreign_keys != columns
-        ), "Foreign keys and columns cannot be the same."
+        assert foreign_keys != columns, (
+            "Foreign keys and columns cannot be the same."
+        )
 
         table_dict = {
             "name": table,
@@ -151,12 +149,14 @@ class SQLiteConnector(DBConnector):
                                  auto transforming your columns, so define your own
                                  adapters/converters and use at your own risk!
 
-        """
+        """  # noqa: E501
         self.credentials = credentials
         self.allow_custom_dtypes = allow_custom_dtypes
 
     def __enter__(self) -> Self:
-        """Enter context manager for SQLiteConnector by opening a connection and creating a cursor.
+        """Enter context manager for SQLiteConnector.
+
+        This will open a connection and create a cursor.
 
         Returns
         -------
@@ -177,10 +177,8 @@ class SQLiteConnector(DBConnector):
         self.schema = self.get_schema()
         return self
 
-    def __exit__(
-        self, exception: object, value: object, traceback: object
-    ) -> None:
-        """Exit context manager by closing connection, and rolling back on an exception."""
+    def __exit__(self, exception: object, value: object, traceback: object) -> None:
+        """Exit context manager by closing connection, rolling back on exception."""
         if exception:
             self.connection.rollback()
         else:
@@ -198,7 +196,7 @@ class SQLiteConnector(DBConnector):
                     table: to insert into
                     columns: to insert values into
 
-        Returns:
+        Returns
         -------
                     valid insert query
 
@@ -217,7 +215,7 @@ class SQLiteConnector(DBConnector):
             alias: for the primary key
             columns: to read values from
 
-        Returns:
+        Returns
         -------
             valid insert query
 
