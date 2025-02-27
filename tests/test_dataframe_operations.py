@@ -69,7 +69,7 @@ def test_basic_has_nulls() -> None:
 
 @given(strategy=has_nulls_strategy())
 def test_has_nulls(strategy: HasNullsStrategy) -> None:
-    """Simulation test whether has_nulls() correctly detects tht presence of null values."""  # noqa: E501
+    """Simulation test whether has_nulls() correctly detects the presence of null values."""  # noqa: E501
     assert has_nulls(strategy.df) == strategy.has_nulls
 
 
@@ -414,6 +414,23 @@ def test_basic_merge_ids() -> None:
     # testing missing ids
     with pytest.raises(MissingKeysAfterMergeError):
         merge_ids(df, db_fetch_missings, alias)
+
+
+def test_basic_merge_ids_missings() -> None:
+    """Basic test of merge_ids() with missing values."""
+    alias = "a_id"
+    df = pl.DataFrame({"a": ["A", "B", "C"]})
+    db_fetch = [
+        {"a_id": 1, "a": "A", "b": 1},
+        {"a_id": 2, "a": "B", "b": 1},
+        {"a_id": 3, "a": None, "b": 1},
+        {"a_id": 3, "a": "C", "b": None},
+    ]
+    out_df = pl.DataFrame(
+        {"a": ["A", "B", None, "C"], "a_id": [1, 2, 3, 3], "b": [1, 1, 1, None]}
+    )
+    out = merge_ids(df, db_fetch, alias)
+    assert_frame_equal(out_df, out, check_column_order=False, check_row_order=False)
 
 
 @given(strategy=merge_ids_strategy())
