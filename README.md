@@ -41,9 +41,13 @@ and also figures out the order in which to load such that consistency across ref
 This does mean that `sql-autoloader` needs to make assumptions.
 
 ## Assumptions
-- The data do not contain any missing values.
-    During the `RETRIEVE` step, data retrieved from the database are joined to the original data.
-    Missing values can behave very unpredictably during this process, so these are not allowed.
+- Primary and foreign keys should never be empty.
+    During the `RETRIEVE` step, primary keys from the database are joined to the original data.
+    This allows `sql-autoloader` to properly link primary and foreign keys.
+    This does mean that every foreign key reference should end up with a primary key.
+    In other words, these values cannot be missing. `sql-autoloader` will perform a check that this is the case.
+    > If this check fails, this usually points to a design assumption being violated. This might mean your
+    > data is incorrect, or your assumptions about the data are.
 - The database schema is defined prior to loading.
     `sql-autoloader` reads the schema from the database, and tries to match this with the data you want to load.
     That means the schema must be already be defined at the time of loading. 
