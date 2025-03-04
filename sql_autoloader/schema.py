@@ -347,14 +347,24 @@ class Schema:
            list of tables to load.
 
         """
+        # First getting a list of tables straight from the column names
         tables = list(unique(self._get_table_name_by_column(col) for col in columns))
 
+        # Next parsing the nodes to check if any other tables can be loaded using these columns.
         for node in self._topological_sort:
-            if node not in tables and all(
-                predecessor in tables
-                for predecessor in self.graph.predecessors(node)
-            ):
+            if node in tables:
+                continue
+            predecessors = list(self.graph.predecessors(node))
+            if len(predecessors) == 0:
+                continue
+            if all(predecessor in tables for predecessor in predecessors):
                 tables.append(node)
+
+        # NOTE: I'm not entirely sure if this assumption always has to hold
+        subgraph = self.graph.subgraph(tables)
+        assert nx.isomorphism.DiGraphMatcher(
+            self.graph, subgraph
+        ).subgraph_is_isomorphic(), "Selected tables do not form a valid subgraph"
 
         return tables
 
