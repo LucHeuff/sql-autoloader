@@ -37,6 +37,7 @@ class TableStrategy:
     table_dict: TableDict
     all_columns: list[str]
     prefix_column_map: dict[str, str]
+    is_linking: bool
     has_primary_key: bool
     prefixed_columns_without: list[tuple[str, str]]
     prefixed_columns_with: list[tuple[str, str]]
@@ -46,10 +47,15 @@ class TableStrategy:
 def table_strategy(draw: st.DrawFn) -> TableStrategy:
     """Strategy for testing Table."""
     name: str = draw(name_generator())
+    is_linking = draw(st.booleans())
     has_primary_key = draw(st.booleans())
     primary_key = draw(name_generator()) if has_primary_key else ""
     all_columns = draw(names_generator(min_size=3))
-    n_foreign_keys = draw(st.integers(0, len(all_columns)))
+    n_foreign_keys = (
+        draw(st.integers(0, len(all_columns) - 1))
+        if not is_linking
+        else len(all_columns)
+    )
     foreign_keys = all_columns[:n_foreign_keys]
     columns = all_columns[n_foreign_keys:]
     prefix_column_map = {f"{name}.{col}": col for col in all_columns}
@@ -68,6 +74,7 @@ def table_strategy(draw: st.DrawFn) -> TableStrategy:
         table_dict,
         all_columns,
         prefix_column_map,
+        is_linking,
         has_primary_key,
         prefixed_columns_without,
         prefixed_columns_with,
@@ -93,6 +100,7 @@ def test_basic_table() -> None:
     assert table.columns_and_foreign_keys == foreign_keys + columns
     assert table.has_primary_key
     assert table.prefix_column_map == prefix_column_map
+    assert not table.is_linking
     # Testing __contains__
     assert all(col in table for col in columns + foreign_keys)
     # Testing methods
@@ -103,6 +111,23 @@ def test_basic_table() -> None:
     ]
     # Testing __str__
     assert str(table) == "Table test (\n\tid\n\tone_id\n\ttwo_id\n\tone\n\ttwo\n)"
+
+
+def test_basic_linking_table() -> None:
+    """Test whether a linking table is recognised correctly."""
+    columns = []
+    primary_key = "id"
+    foreign_keys = ["one_id", "two_id"]
+
+    table_dict = {
+        "name": "test",
+        "foreign_keys": foreign_keys,
+        "primary_key": primary_key,
+        "columns": columns,
+    }
+
+    table = Table(**table_dict)
+    assert table.is_linking
 
 
 def test_empty_table() -> None:
@@ -119,6 +144,7 @@ def test_table(strategy: TableStrategy) -> None:
 
     # Testing properties
     assert table.columns_and_foreign_keys == strategy.all_columns
+    assert table.is_linking == strategy.is_linking
     assert table.has_primary_key == strategy.has_primary_key
     assert table.prefix_column_map == strategy.prefix_column_map
     # Testing __contains__

@@ -328,6 +328,7 @@ def integration_strategy(draw: st.DrawFn) -> IntegrationStrategy:
     return IntegrationStrategy(schema, df, no_isolates)
 
 
+# Note: this test probably misses more edge cases than you might think
 @given(strategy=integration_strategy())
 def test_integration(strategy: IntegrationStrategy) -> None:
     """Simulation test of SQLiteConnector."""

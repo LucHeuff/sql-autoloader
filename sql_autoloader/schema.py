@@ -47,9 +47,9 @@ class Table(BaseModel):
     def verify_not_empty(self) -> Self:
         """Validate that the Table is not empty.
 
-        (no columns, primary or foreign keys).
+        (no columns or foreign keys).
         """
-        if len(self.columns) == 0 and not self.primary_key and not self.foreign_keys:
+        if len(self.columns) == 0 and len(self.foreign_keys) == 0:
             message = f"{self!r} seems to be empty, what is it for?"
             raise InvalidTableError(message)
         return self
@@ -101,6 +101,14 @@ class Table(BaseModel):
     def has_primary_key(self) -> bool:
         """Return whether the table has a primary key."""
         return bool(self.primary_key)
+
+    @property
+    def is_linking(self) -> bool:
+        """Return whether this table is a linking table.
+
+        Linking tables are tables where all columns are primary or foreign keys
+        """
+        return len(self.columns) == 0
 
     @cached_property
     def prefix_column_map(self) -> dict[str, str]:
@@ -336,7 +344,7 @@ class Schema:
     def _get_relevant_tables(self, columns: list[str]) -> list[str]:
         """Get a list of tables that are relevant to this set of columns.
 
-        Searches through the graph for tables and their successors.
+        Also Searches through the graph to find relevant linking tables.
 
         Args:
         ----
@@ -350,17 +358,24 @@ class Schema:
         # First getting a list of tables straight from the column names
         tables = list(unique(self._get_table_name_by_column(col) for col in columns))
 
-        # Next parsing the nodes to check if any other tables can be loaded using these columns.
+        # Finding linking tables, which are assumed to be many-to-many tables
+        # consisting of only primary or foreign keys, since any tables represented by
+        # one of the columns is now already in our list.
+
+        # iterating through topological sort makes sure that linking tables are
+        # not discarded before all its predecessors are in tables
         for node in self._topological_sort:
+            # if the node is already in tables, skip it
             if node in tables:
                 continue
-            predecessors = list(self.graph.predecessors(node))
-            if len(predecessors) == 0:
+            if not self._get_table(node).is_linking:
                 continue
+
+            predecessors = list(self.graph.predecessors(node))
             if all(predecessor in tables for predecessor in predecessors):
                 tables.append(node)
 
-        # NOTE: I'm not entirely sure if this assumption always has to hold
+        # NOTE: I'm not entirely sure if this assumption is all that useful
         subgraph = self.graph.subgraph(tables)
         assert nx.isomorphism.DiGraphMatcher(
             self.graph, subgraph
@@ -442,7 +457,9 @@ class Schema:
 
         # I cannot deal with comparing when isolated tables are involved, so throwing back to the user.
         if nx.number_of_isolates(subgraph) > 0:
-            isolated = [nx.is_isolate(subgraph, node) for node in subgraph.nodes]
+            isolated = [
+                node for node in subgraph.nodes if nx.is_isolate(subgraph, node)
+            ]
             message = f"Automatic compare query generation cannot handle any isolated tables, but '{isolated}' do not link to any other table when considering '{tables}'.\nEither provide a compare query yourself, make sure the data you are loading all relate to one another, or disable comparison if you do not care."
             raise IsolatedTablesError(message)
 
