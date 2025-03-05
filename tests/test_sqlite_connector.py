@@ -342,7 +342,7 @@ def test_integration(strategy: IntegrationStrategy) -> None:
 
             # If there are no isolates, can test compare query generation
             if strategy.no_isolates:
-                sqlite.load(strategy.df, compare=True)
+                sqlite.load(strategy.df, compare=True, exact=False)
                 compare_query = sqlite.schema.get_compare_query(strategy.df.columns)
                 sqlite.cursor.execute(compare_query)
                 db_data = pl.DataFrame(sqlite.cursor.fetchall())
