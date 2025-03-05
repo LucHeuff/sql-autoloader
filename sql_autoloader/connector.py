@@ -21,7 +21,7 @@ def invert(d: dict[str, str]) -> dict[str, str]:
 
 
 def preprocess(data: pl.DataFrame, columns: dict[str, str] | None) -> pl.DataFrame:
-    """Check if data contains nulls and rename columns.
+    """Check rename columns and remove duplicate rows.
 
     Args:
     ----
@@ -34,7 +34,7 @@ def preprocess(data: pl.DataFrame, columns: dict[str, str] | None) -> pl.DataFra
 
     """
     columns = {} if columns is None else columns
-    return data.rename(columns)
+    return data.rename(columns).unique()
 
 
 def postprocess(data: pl.DataFrame, columns: dict[str, str] | None) -> pl.DataFrame:

@@ -67,7 +67,7 @@ CREATE TABLE dossier (
 """
 
 
-def test_empty_predecessors() -> None:
+def test_stoffen() -> None:
     """Test bug with empty predecessors.
 
     A bug occurred when a table with no predecessors was not part of the tables
@@ -77,9 +77,9 @@ def test_empty_predecessors() -> None:
     """
     data = pl.DataFrame(
         {
-            "ec_number": ["1", "2", "3"],
-            "cas_number": ["A", "B", None],
-            "substance_name": ["c", None, "d"],
+            "ec_number": ["1", "2", "3", "4", "4"],
+            "cas_number": ["A", "B", None, None, None],
+            "substance_name": ["c", None, "d", None, None],
         }
     )
 
@@ -102,5 +102,5 @@ def test_empty_predecessors() -> None:
         db_data = pl.DataFrame(sqlite.cursor.fetchall())
 
         assert_frame_equal(
-            data, db_data, check_row_order=False, check_column_order=False
+            data.unique(), db_data, check_row_order=False, check_column_order=False
         )

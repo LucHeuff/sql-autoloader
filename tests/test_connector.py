@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import hypothesis.strategies as st
 import polars as pl
 from hypothesis import given
+from polars.testing import assert_frame_equal
 from polars.testing.parametric import dataframes
 
 from sql_autoloader.connector import postprocess, preprocess
@@ -37,3 +38,4 @@ def test_processing(strategy: ProcessingStrategy) -> None:
     pre = preprocess(strategy.df, strategy.columns)
     post = postprocess(pre, strategy.columns)
     assert strategy.df.columns == post.columns
+    assert not post.is_duplicated().any()

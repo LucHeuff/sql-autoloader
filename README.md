@@ -41,13 +41,11 @@ and also figures out the order in which to load such that consistency across ref
 This does mean that `sql-autoloader` needs to make assumptions.
 
 ## Assumptions
-- Primary and foreign keys should never be empty.
-    During the `RETRIEVE` step, primary keys from the database are joined to the original data.
-    This allows `sql-autoloader` to properly link primary and foreign keys.
-    This does mean that every foreign key reference should end up with a primary key.
-    In other words, these values cannot be missing. `sql-autoloader` will perform a check that this is the case.
-    > ℹ️  If this check fails, this usually points to a design assumption being violated. This might mean your
-    > data is incorrect, or your assumptions about the data are.
+- Data should not contain duplicate rows.
+    In general, good practice in SQL minimizes data duplication, and this is something that `sql-autoloader` enforces.
+    If you are interested in storing repeated observations, add something that makes the row unique (for example a timestamp or a hash) in your databse design.
+    > ⚠️ This assumption is **enforced**, all `sql-autoloader` functions will remove duplicate rows as a preprocessing step.
+
 - The database schema is defined prior to loading.
     `sql-autoloader` reads the schema from the database, and tries to match this with the data you want to load.
     That means the schema must be already be defined at the time of loading. 
@@ -58,6 +56,13 @@ This does mean that `sql-autoloader` needs to make assumptions.
     As far as I am aware, SQL does not require foreign keys referring to the same primary key in another table to have the same name.
     However, this makes algorithmically figuring out the order in which tables should be loaded much more difficult,
     so `sql-autoloader` requires all foreign keys that refer to the same primary key to have the same name. 
+- Primary and foreign keys should never be empty.
+    During the `RETRIEVE` step, primary keys from the database are joined to the original data.
+    This allows `sql-autoloader` to properly link primary and foreign keys.
+    This does mean that every foreign key reference should end up with a primary key.
+    In other words, these values cannot be missing. `sql-autoloader` will perform a check that this is the case.
+    > ℹ️ If this check fails, this usually points to a design assumption being violated. This might mean your
+    > data is incorrect, or your assumptions about the data are.
 
 > ℹ️ `sql-autoloader` will automatically raise exceptions if these assumptions are not met.
 
