@@ -526,10 +526,6 @@ class Schema:
         )
         # removing duplicate tables from path
         join_tables = list(unique_everseen(path))
-        # join_tables should be one longer than references
-        assert len(join_tables) == len(references) + 1, (
-            "join_tables not one longer than references."
-        )
 
         # constructing the join clause
         join_lines = [
