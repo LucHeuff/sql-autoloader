@@ -1,9 +1,11 @@
 """These are all tests from bugs that appeared in production use."""
 
 import polars as pl
+import pytest
 from polars.testing import assert_frame_equal
 
 from sql_autoloader import SQLiteConnector
+from sql_autoloader.exceptions import CompareNoExactMatchError
 
 # Based on a realistic schema
 schema = """
@@ -104,3 +106,33 @@ def test_stoffen() -> None:
         assert_frame_equal(
             data.unique(), db_data, check_row_order=False, check_column_order=False
         )
+
+
+def test_duplicate_with_missings() -> None:
+    """Test if datasets with partial missings get loaded and compared correctly."""
+    schema = """
+    CREATE TABLE a (
+        id INTEGER PRIMARY KEY,
+        a INTEGER UNIQUE NOT NULL
+    );
+
+    CREATE TABLE b (
+        a_id INTEGER REFERENCES a (id),
+        b INTEGER UNIQUE NOT NULL
+    );
+
+    CREATE TABLE c (
+        a_id INTEGER REFERENCES a (id),
+        c TEXT UNIQUE NOT NULL
+    );
+    """
+    data = pl.DataFrame({"a": [1, 1], "b": [2, 2], "c": [None, "a"]})
+
+    with SQLiteConnector(":memory:") as sqlite:
+        sqlite.cursor.executescript(schema)
+        sqlite.update_schema()
+
+        with pytest.raises(CompareNoExactMatchError):
+            sqlite.load(data)
+
+        sqlite.load(data, exact=False)

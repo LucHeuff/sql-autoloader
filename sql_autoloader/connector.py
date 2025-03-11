@@ -7,6 +7,7 @@ import polars as pl
 from sql_autoloader.dataframe_operations import (
     compare,
     get_rows,
+    has_nulls,
     merge_ids,
 )
 from sql_autoloader.schema import ReferenceDict, Schema, TableDict
@@ -311,6 +312,8 @@ class DBConnector(ABC):
             exact: (Optional) whether all the rows in data must match all
                    the rows retrieved from the database. If False, only checks
                    if rows from data appear in rows from query.
+                   Setting exact to false will also remove rows with missings
+                   from data.
 
 
         """
@@ -326,9 +329,11 @@ class DBConnector(ABC):
         db_rows = self.cursor.fetchall()
 
         assert len(db_rows) > 0, "Compare query yielded no results."
-        assert len(db_rows) >= len(data), (
-            "Compare query yielded fewer rows than data."
-        )
+        # the following check is not always valid if the data contain missings
+        if not has_nulls(data):
+            assert len(db_rows) >= len(data), (
+                f"Compare query yielded fewer rows ({len(db_rows)}) than data. ({len(data)})"
+            )
 
         compare(data, db_rows, exact=exact)
 
@@ -372,6 +377,7 @@ class DBConnector(ABC):
             exact: (Optional) whether all the rows in data must match all rows
                    retrieved from the database in comparison.
                    If False, only checks if rows from data appear in rows from query.
+                   Setting exact=False will also remove rows with missings from data.
 
         Returns
         -------

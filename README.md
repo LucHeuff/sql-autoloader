@@ -167,7 +167,7 @@ load(
 `replace` (Optional): Whether columns can be replaced with the relevant foreign keys upon retrieval. If set to `False`, all columns are preserved\
 `allow_duplication` (Optional): Whether rows are allowed to be duplicated upon retrieval\
 `where` (Optional): allows adding a `WHERE`-clause to be added onto the comparison query. Please prefix the column you are conditioning on with its relevant table, otherwise this condition may result in SQL errors\
-`exact` (Optional): whether the rows in the data retrieved through the comparison query must match `data` exactly. If set to `False`, will only check if the rows from `data` appear in the retrieved data\
+`exact` (Optional): whether the rows in the data retrieved through the comparison query must match `data` exactly. If set to `False`, will only check if the rows from `data` appear in the retrieved data. If your data contain missings, setting to `False` will remove rows with missings. This can be helpful if your database does not allow for missing values.\
 
 This function will return the original data including the foreign keys (where original columns were replaced depending on `replace`), in case you want to use these downstream.
 
@@ -245,7 +245,7 @@ compare(
 `columns` (Optional): Translation of columns in the data to the relevant column names in the table, in the format {<data_name>: <db_name>}\
 `where` (Optional): a `WHERE` clause to filter selection from the database. Should always use table prefixes for the columns being conditioned on\
                      Mostly intended when `query` is left empty, otherwise you could just bundle it there as well\
-`exact` (Optional): whether the rows in the data retrieved through the comparison query must match `data` exactly. If set to `False`, will only check if the rows from `data` appear in the retrieved data\
+`exact` (Optional): whether the rows in the data retrieved through the comparison query must match `data` exactly. If set to `False`, will only check if the rows from `data` appear in the retrieved data. If your data contain missings, setting to `False` will remove rows with missings. This can be helpful if your database does not allow for missing values.\
 
 ### `update_schema`
 The database schema is retrieved whenever the `*Connector` context manager is created.

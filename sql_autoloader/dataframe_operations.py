@@ -26,8 +26,12 @@ def compare(df: pl.DataFrame, db_rows: list[dict], *, exact: bool = True) -> Non
         exact: (Optional) whether all the rows in data must match all the
                 rows retrieve from the database. If False, only checks if
                 rows from data appear in rows from query.
+                Setting exact to false will also remove rows with missings
+                from data.
 
     """
+    if not exact and has_nulls(df):
+        df = df.drop_nulls()
     data_rows = get_rows(df, df.columns)
     rows_in_db = [row in db_rows for row in data_rows]
     rows_in_data = [row in data_rows for row in db_rows]
@@ -38,7 +42,7 @@ def compare(df: pl.DataFrame, db_rows: list[dict], *, exact: bool = True) -> Non
         db_data = match_dtypes(df, db_rows)
         data_difference = df.with_row_index().filter(~pl.Series(rows_in_db))
         db_difference = db_data.filter(~pl.Series(rows_in_data))
-        message = f"Datasets do not match exactly.\nRows in data and not in db:\n{data_difference}\nRows in db and not in data:\n{db_difference}"  # noqa: E501
+        message = f"Datasets do not match exactly.\nRows in data and not in db:\n{data_difference}\nRows in db and not in data:\n{db_difference}\n\nNote: if this happens due to your data containing missings and your database not allowing those, set exact=False"  # noqa: E501
         raise CompareNoExactMatchError(message)
 
     # check if all rows in data appear in the database
