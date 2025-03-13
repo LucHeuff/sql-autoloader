@@ -159,3 +159,30 @@ def test_schema_bug() -> None:
         sqlite.cursor.executescript(schema)
         with pytest.raises(TableDoesNotExistError):
             sqlite.update_schema()
+
+
+def test_ambiguous_bug() -> None:
+    """Test error where ambiguousness check is tripped unnecessarily."""
+    schema = """
+    CREATE TABLE a (
+        id INTEGER PRIMARY KEY,
+        a TEXT
+    );
+
+    CREATE TABLE b (
+        a_id INTEGER REFERENCES a (id),
+        b TEXT
+    );
+
+    CREATE TABLE c (
+        a1_id INTEGER REFERENCES a (id),
+        a2_id INTEGER REFERENCES a (id),
+        c TEXT
+    );
+    """
+    data = pl.DataFrame({"a": ["one", "one"], "b": ["one", "two"]})
+
+    with SQLiteConnector(":memory:") as sqlite:
+        sqlite.cursor.executescript(schema)
+        sqlite.update_schema()
+        sqlite.load(data)

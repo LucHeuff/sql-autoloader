@@ -595,7 +595,7 @@ class Schema:
             # and is referred to in the current subgraph
 
             # -> Look for successors of this node in the subgraph
-            successors = list(self.graph.successors(table))
+            successors = list(subgraph.successors(table))
 
             if self._get_table(table).has_primary_key and len(successors) > 0:
                 # Find the alias with which should be retrieved
