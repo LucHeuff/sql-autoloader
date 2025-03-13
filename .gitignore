@@ -8,4 +8,5 @@ dev.py
 *.db
 *.sql
 *.lock
+.sqruff
 
