@@ -247,6 +247,14 @@ class Schema:
             self.graph.add_node(table.name, table=table)
         for reference_dict in reference_dicts:
             reference = Reference(**reference_dict)
+            # add_edge will also add tables that don't appear in table_dict.
+            # This leads to an unclear error somewhere down the line,
+            # which I'd like to avoid.
+            if reference.to_table not in self.graph.nodes:
+                reference_example = f"On table '{reference.from_table}':\n\t{reference.from_key} REFERENCES {reference.to_table} ({reference.to_key})"
+                message = f"Table {reference.to_table} does not appear in list of tables. Is the following reference correct?\n{reference_example}"
+                raise TableDoesNotExistError(message)
+
             self.graph.add_edge(
                 reference.to_table, reference.from_table, reference=reference
             )
