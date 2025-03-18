@@ -245,7 +245,7 @@ class DBConnector(ABC):
 
         if replace:
             # Use table schema to determine which non_id columns can be dropped.
-            data.drop(self.schema.get_columns(table))
+            data.drop(self.schema.get_columns(table), strict=False)
 
         return postprocess(data, columns)
 

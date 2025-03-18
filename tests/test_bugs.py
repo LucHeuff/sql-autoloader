@@ -186,3 +186,34 @@ def test_ambiguous_bug() -> None:
         sqlite.cursor.executescript(schema)
         sqlite.update_schema()
         sqlite.load(data)
+
+
+def test_retrieve_drop_bug() -> None:
+    """Test if retrieve_ids tries to drop columns that aren't there."""
+    schema = """
+    CREATE TABLE a (
+        id INTEGER PRIMARY KEY,
+        a TEXT UNIQUE,
+        extra TEXT
+    );
+
+    CREATE TABLE b (
+        a_id INTEGER REFERENCES a (id),
+        b TEXT
+    );
+    """
+    data = pl.DataFrame(
+        {
+            "a": ["one", "two", "three"],
+            "b": ["een", "twee", "drie"],
+            "extra": ["this", "is", "fun"],
+        }
+    )
+    retrieve_data = pl.DataFrame({"a": ["one", "two"]})
+
+    with SQLiteConnector(":memory:") as sqlite:
+        sqlite.cursor.executescript(schema)
+        sqlite.update_schema()
+        sqlite.load(data)
+
+        sqlite.retrieve_ids(retrieve_data, table="a", alias="a_id")
