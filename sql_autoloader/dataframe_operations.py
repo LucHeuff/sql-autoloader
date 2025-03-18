@@ -42,7 +42,7 @@ def compare(df: pl.DataFrame, db_rows: list[dict], *, exact: bool = True) -> Non
         db_data = match_dtypes(df, db_rows)
         data_difference = df.with_row_index().filter(~pl.Series(rows_in_db))
         db_difference = db_data.filter(~pl.Series(rows_in_data))
-        message = f"Datasets do not match exactly.\nRows in data and not in db:\n{data_difference}\nRows in db and not in data:\n{db_difference}\n\nNote: if this happens due to your data containing missings and your database not allowing those, set exact=False"  # noqa: E501
+        message = f"Datasets do not match exactly.\nRows in data and not in db:\n{data_difference}\nRows in db and not in data:\n{db_difference}\n\nConsider adding a WHERE clause to filter out irrelevant data.\nNote: if this happens due to your data containing missings and your database not allowing those, set exact=False"  # noqa: E501
         raise CompareNoExactMatchError(message)
 
     # check if all rows in data appear in the database
@@ -149,7 +149,11 @@ def merge_ids(
     # Alias should not return empty
     if has_nulls(df.select(alias)):
         rows_with_missings = df.filter(pl.any_horizontal(alias).is_null())
-        message = "Some id's were returned as NA:\n" + str(rows_with_missings)
+        message = (
+            "Some id's were returned as NA:\n"
+            + str(rows_with_missings)
+            + "\nCheck if the uniqueness assumptions you made in your database schema are correct, or whether your made a mistake in your schema definitions somewhere."  # noqa: E501
+        )
         raise MissingKeysAfterMergeError(message)
 
     return df
