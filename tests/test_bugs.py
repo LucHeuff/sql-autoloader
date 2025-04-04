@@ -11,7 +11,7 @@ from sql_autoloader.exceptions import (
 )
 
 
-def test_stoffen() -> None:
+def test_empty_predecessors_bug() -> None:
     """Test bug with empty predecessors.
 
     # A bug occurred when a table with no predecessors was not part of the tables
@@ -111,7 +111,7 @@ def test_stoffen() -> None:
         )
 
 
-def test_duplicate_with_missings() -> None:
+def test_duplicate_with_missings_bug() -> None:
     """Test if datasets with partial missings get loaded and compared correctly."""
     schema = """
     CREATE TABLE a (
@@ -217,3 +217,27 @@ def test_retrieve_drop_bug() -> None:
         sqlite.load(data)
 
         sqlite.retrieve_ids(retrieve_data, table="a", alias="a_id")
+
+
+def test_load_ids_bug() -> None:
+    """Test if load() can also handle loading into foreign key columns."""
+    schema = """
+    CREATE TABLE a (id INTEGER PRIMARY KEY, a TEXT UNIQUE NOT NULL);
+
+    CREATE TABLE b (id INTEGER PRIMARY KEY, b TEXT UNIQUE NOT NULL);
+
+    CREATE TABLE c (
+        a_id INTEGER REFERENCES a (id),
+        b_id INTEGER REFERENCES b (id),
+        c TEXT UNIQUE NOT NULL
+    );
+    """
+    data = pl.DataFrame(
+        {"a_id": [1, 2, 3], "b_id": [1, 2, 3], "c": ["one", "two", "three"]}
+    )
+
+    with SQLiteConnector(":memory:") as sqlite:
+        sqlite.cursor.executescript(schema)
+        sqlite.update_schema()
+
+        sqlite.load(data)

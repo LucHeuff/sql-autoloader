@@ -464,7 +464,8 @@ class Schema:
         subgraph = nx.subgraph(self.graph, tables)
 
         # I cannot deal with comparing when isolated tables are involved, so throwing back to the user.
-        if nx.number_of_isolates(subgraph) > 0:
+        # This is only an issue when I'm trying to load to multiple tables
+        if len(tables) > 1 and nx.number_of_isolates(subgraph) > 0:
             isolated = [
                 node for node in subgraph.nodes if nx.is_isolate(subgraph, node)
             ]
@@ -473,10 +474,11 @@ class Schema:
 
         # I also cannot deal with isolated subgraphs
         if (
-            len(isolated_subgraps := list(nx.weakly_connected_components(subgraph)))
+            len(tables) > 1
+            and len(iso_subgraps := list(nx.weakly_connected_components(subgraph)))
             > 1
         ):
-            message = f"Automatic compare query generation cannot handle isolated subgraphs, but found weakly connected components: '{isolated_subgraps}'"
+            message = f"Automatic compare query generation cannot handle isolated subgraphs, but found weakly connected components: '{iso_subgraps}'"
             raise IsolatedSubgraphsError(message)
 
         # --- Building the SELECT clause
@@ -495,69 +497,76 @@ class Schema:
 
         select_clause = f"SELECT\n{',\n'.join(select_aliases)}"
 
-        # --- Building the JOIN clause
-        # I want to be able to ignore the edge direction, so I also need an undirected graph.
-        undirected = subgraph.to_undirected()
+        # If only writing to a single table, no need to try and figure out joins
+        if len(tables) == 1:
+            # I do need to add from which table selection is happening
+            join_clause = f"FROM {next(iter(tables))}"
+        else:
+            # --- Building the JOIN clause
+            # I want to be able to ignore the edge direction, so I also need an undirected graph.
+            undirected = subgraph.to_undirected()
 
-        # ---- Replace below here?
-        path = nx.dag_longest_path(subgraph)
+            # ---- Replace below here?
+            path = nx.dag_longest_path(subgraph)
 
-        assert len(path) > 0, "only found empty base path."
+            assert len(path) > 0, "only found empty base path."
 
-        # There is no guarantee that all tables have been visited by the path.
-        # The missing tables will be added to the path iteratively,
-        # by splicing them in the path as a loop, which makes sure that the transistions
-        # are still valid.
-        for table in tables:
-            # Checking if the table was not already added in a previous loop iteration
-            if table not in path:
-                # this results in a dictionary with the path from table to all other tables
-                table_paths = {
-                    target: _path
-                    for (target, _path) in nx.shortest_path(
-                        undirected, table
-                    ).items()
-                    if target in path
-                }
-                assert len(table_paths) > 0, "No valid node-paths found."
-                # fetching the target table for the shortest path in which the most missing tables appear.
-                target = sorted(
-                    table_paths,
-                    key=lambda t: sum(node not in path for node in table_paths[t]),
-                    reverse=True,
-                )[0]
-                # finding where in the path this target (first) appears. Moving one to the left so the new path being added appears after the target.
-                index = path.index(target) + 1
-                # we want to walk along the edges to the missing table, and back to the target table in a loop
-                # this makes sure that the edges are all still valid.
-                # nx.shortest_path results in paths from table to target, so need to reverse that first
-                loop = list(reversed(table_paths[target])) + table_paths[target]
-                # splicing the loop into the path
-                path[index:index] = loop
-                # removing consecutive duplicate nodes we introduced by adding the loop
-                path = list(unique_justseen(path))
+            # There is no guarantee that all tables have been visited by the path.
+            # The missing tables will be added to the path iteratively,
+            # by splicing them in the path as a loop, which makes sure that the transistions
+            # are still valid.
+            for table in tables:
+                # Checking if the table was not already added in a previous loop iteration
+                if table not in path:
+                    # this results in a dictionary with the path from table to all other tables
+                    table_paths = {
+                        target: _path
+                        for (target, _path) in nx.shortest_path(
+                            undirected, table
+                        ).items()
+                        if target in path
+                    }
+                    assert len(table_paths) > 0, "No valid node-paths found."
+                    # fetching the target table for the shortest path in which the most missing tables appear.
+                    target = sorted(
+                        table_paths,
+                        key=lambda t: sum(
+                            node not in path for node in table_paths[t]
+                        ),
+                        reverse=True,
+                    )[0]
+                    # finding where in the path this target (first) appears. Moving one to the left so the new path being added appears after the target.
+                    index = path.index(target) + 1
+                    # we want to walk along the edges to the missing table, and back to the target table in a loop
+                    # this makes sure that the edges are all still valid.
+                    # nx.shortest_path results in paths from table to target, so need to reverse that first
+                    loop = list(reversed(table_paths[target])) + table_paths[target]
+                    # splicing the loop into the path
+                    path[index:index] = loop
+                    # removing consecutive duplicate nodes we introduced by adding the loop
+                    path = list(unique_justseen(path))
 
-        # making sure the loop above resulted in a valid path
-        assert nx.is_path(undirected, path), (
-            "Adding missing tables resulted in an invalid path."
-        )
-
-        # retrieving references based on the path, and removing duplicates
-        references = list(
-            unique_everseen(
-                undirected.get_edge_data(u, v)["reference"]
-                for (u, v) in windowed(path, 2)
+            # making sure the loop above resulted in a valid path
+            assert nx.is_path(undirected, path), (
+                "Adding missing tables resulted in an invalid path."
             )
-        )
-        # removing duplicate tables from path
-        join_tables = list(unique_everseen(path))
 
-        # constructing the join clause
-        join_lines = [
-            f"LEFT JOIN {table} {ref}"
-            for (table, ref) in zip(join_tables[1:], references, strict=False)
-        ]
-        join_clause = f"\nFROM {join_tables[0]}\n{'\n'.join(join_lines)}"
+            # retrieving references based on the path, and removing duplicates
+            references = list(
+                unique_everseen(
+                    undirected.get_edge_data(u, v)["reference"]
+                    for (u, v) in windowed(path, 2)
+                )
+            )
+            # removing duplicate tables from path
+            join_tables = list(unique_everseen(path))
+
+            # constructing the join clause
+            join_lines = [
+                f"LEFT JOIN {table} {ref}"
+                for (table, ref) in zip(join_tables[1:], references, strict=False)
+            ]
+            join_clause = f"\nFROM {join_tables[0]}\n{'\n'.join(join_lines)}"
 
         return select_clause + join_clause + where_clause
 
@@ -707,7 +716,7 @@ class Schema:
         mapping = {}
         for table_name in self.graph.nodes:
             table = self._get_table(table_name)
-            for col in table.columns:
+            for col in table.columns_and_foreign_keys:
                 if col not in mapping:
                     mapping[col] = [table_name]
                 else:

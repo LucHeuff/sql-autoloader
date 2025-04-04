@@ -336,7 +336,8 @@ def test_schema() -> None:
     # first inverting the mapping from tables
     mapping = {}
     for d in tables:
-        for col in d["columns"]:
+        columns_and_foreign_keys = d["columns"] + d["foreign_keys"]
+        for col in columns_and_foreign_keys:
             if col not in mapping:
                 mapping[col] = [d["name"]]
             else:
