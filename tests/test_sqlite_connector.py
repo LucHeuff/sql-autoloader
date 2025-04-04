@@ -1,5 +1,6 @@
 from collections import Counter
 from dataclasses import dataclass
+from re import S
 from tempfile import NamedTemporaryFile
 
 import hypothesis.strategies as st
@@ -35,6 +36,45 @@ def test_get_retrieve_query() -> None:
     columns = ["kleur", "zadel", "wielen"]
     query = "SELECT id as fiets_id, kleur, zadel, wielen FROM fiets"
     assert _get_retrieve_query(table, key, alias, columns) == query
+
+
+# ---- Test for insert and retrieval
+
+
+def test_insert_and_retrieve() -> None:
+    """Basic test whether inserting and retrieving manually works correctly."""
+    schema = """
+    CREATE TABLE a (id INTEGER PRIMARY KEY, a TEXT UNIQUE NOT NULL);
+
+    CREATE TABLE b (
+    a_id INTEGER REFERENCES a (id),
+    b TEXT UNIQUE NOT NULL
+    );
+
+    """
+
+    data = pl.DataFrame(
+        {
+            "a": ["one", "two", "three"],
+            "b": ["een", "twee", "drie"],
+        }
+    )
+
+    with SQLiteConnector(":memory:") as sqlite:
+        sqlite.cursor.executescript(schema)
+        sqlite.update_schema()
+
+        # testing with replacement
+        replaced = sqlite.insert_and_retrieve_ids(data, table="a", alias="a_id")
+        assert "a_id" in replaced.columns
+        assert "a" not in replaced.columns
+
+        # testing without replacement
+        retrieved = sqlite.insert_and_retrieve_ids(
+            data, table="a", alias="a_id", replace=False
+        )
+        assert "a_id" in retrieved.columns
+        assert "a" in retrieved.columns
 
 
 # --- Integration tests
