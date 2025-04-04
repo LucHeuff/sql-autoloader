@@ -69,6 +69,13 @@ def test_insert_and_retrieve() -> None:
         assert "a_id" in replaced.columns
         assert "a" not in replaced.columns
 
+        # testing with replacement and renaming
+        renamed = sqlite.insert_and_retrieve_ids(
+            data, table="a", alias="a_id", columns={"a": "weg", "b": "a"}
+        )
+        assert "a_id" in renamed.columns
+        assert "b" not in renamed.columns
+
         # testing without replacement
         retrieved = sqlite.insert_and_retrieve_ids(
             data, table="a", alias="a_id", replace=False

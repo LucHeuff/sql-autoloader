@@ -16,9 +16,6 @@ logger = logging.getLogger(__name__)
 
 
 # --- Utility functions
-def invert(d: dict[str, str]) -> dict[str, str]:
-    """Inverts the keys and values of a dictionary."""
-    return {v: k for (k, v) in d.items()}
 
 
 def preprocess(data: pl.DataFrame, columns: dict[str, str] | None) -> pl.DataFrame:
@@ -52,7 +49,8 @@ def postprocess(data: pl.DataFrame, columns: dict[str, str] | None) -> pl.DataFr
 
     """
     if columns is not None:
-        return data.rename(invert(columns))
+        undo_rename = {v: k for (k, v) in columns.items() if v in data.columns}
+        return data.rename(undo_rename)
     return data
 
 
@@ -332,7 +330,7 @@ class DBConnector(ABC):
         # the following check is not always valid if the data contain missings
         if not has_nulls(data):
             assert len(db_rows) >= len(data), (
-                f"Compare query yielded fewer rows ({len(db_rows)}) than data. ({len(data)})"
+                f"Compare query yielded fewer rows ({len(db_rows)}) than data. ({len(data)})"  # noqa: E501
             )
 
         compare(data, db_rows, exact=exact)
