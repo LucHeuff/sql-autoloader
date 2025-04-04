@@ -317,7 +317,7 @@ class Schema:
             return table.name
 
         if column_name not in self._column_table_mapping:
-            message = f"No column with name '{column_name}' appears anywhere in the schema."
+            message = f"No column with name '{column_name}' appears anywhere in the schema.\nNote, sql-autoloader does not allow directly setting primary keys."
             raise NoSuchColumnInSchemaError(message)
 
         tables = self._column_table_mapping[column_name]
