@@ -325,7 +325,7 @@ class Schema:
             message = f"Column name '{column_name}' is ambiguous, as it appears on tables '{tables}'.\nPlease prefix the column name with the correct table using the format <table>.<column>."
             raise ColumnIsAmbiguousError(message)
 
-        return tables[0]
+        return next(iter(tables))
 
     def _get_table_prefix_map(
         self, table_name: str, columns: list[str]
@@ -364,6 +364,7 @@ class Schema:
 
         """
         # First getting a list of tables straight from the column names
+
         tables = list(unique(self._get_table_name_by_column(col) for col in columns))
 
         # Finding linking tables, which are assumed to be many-to-many tables

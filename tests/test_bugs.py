@@ -6,6 +6,7 @@ from polars.testing import assert_frame_equal
 
 from sql_autoloader import SQLiteConnector
 from sql_autoloader.exceptions import (
+    ColumnIsAmbiguousError,
     CompareNoExactMatchError,
     TableDoesNotExistError,
 )
@@ -224,13 +225,18 @@ def test_load_ids_bug() -> None:
     schema = """
     CREATE TABLE a (id INTEGER PRIMARY KEY, a TEXT UNIQUE NOT NULL);
 
-    CREATE TABLE b (id INTEGER PRIMARY KEY, b TEXT UNIQUE NOT NULL);
+    CREATE TABLE b (
+        id INTEGER PRIMARY KEY,
+        a_id INTEGER REFERENCES a (id),
+        b TEXT UNIQUE NOT NULL
+    );
 
     CREATE TABLE c (
         a_id INTEGER REFERENCES a (id),
         b_id INTEGER REFERENCES b (id),
         c TEXT UNIQUE NOT NULL
     );
+
     """
     data = pl.DataFrame(
         {"a_id": [1, 2, 3], "b_id": [1, 2, 3], "c": ["one", "two", "three"]}
@@ -240,4 +246,7 @@ def test_load_ids_bug() -> None:
         sqlite.cursor.executescript(schema)
         sqlite.update_schema()
 
-        sqlite.load(data)
+        with pytest.raises(ColumnIsAmbiguousError):
+            sqlite.load(data)
+
+        sqlite.load(data, columns={"a_id": "c.a_id"})
