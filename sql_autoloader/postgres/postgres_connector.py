@@ -25,12 +25,10 @@ def _get_insert_query(table: str, columns: list[str]) -> str:
     """
     columns_section = ", ".join(columns)
     values_section = ", ".join([f"%({col})s" for col in columns])
-    return f"INSERT INTO {table} ({columns_section}) VALUES ({values_section}) ON CONFLICT DO NOTHING"
+    return f"INSERT INTO {table} ({columns_section}) VALUES ({values_section}) ON CONFLICT DO NOTHING"  # noqa: E501
 
 
-def _get_retrieve_query(
-    table: str, key: str, alias: str, columns: list[str]
-) -> str:
+def _get_retrieve_query(table: str, key: str, alias: str, columns: list[str]) -> str:
     """Get a retrieve query appropriate for a SQLite database.
 
     Args:
@@ -68,7 +66,7 @@ def _fetch_schema(
       c.table_schema = 'public'
     ORDER BY
       c.table_name
-    """
+    """  # noqa: E501
     cursor.execute(tables_query)
     tables_data = pl.DataFrame(cursor.fetchall())
 
@@ -81,8 +79,10 @@ def _fetch_schema(
         foreign_keys = []
         columns = []
 
-        # Postgres returns a separate row for each constraint, so a column can be both FOREIGN KEY and UNIQUE.
-        # I only want to add a column once, so I need to keep track of columns that were already seen.
+        # Postgres returns a separate row for each constraint,
+        # so a column can be both FOREIGN KEY and UNIQUE.
+        # I only want to add a column once,
+        # so I need to keep track of columns that were already seen.
         seen = []
         for row in (
             tables_data.filter(pl.col("table") == table)
@@ -103,9 +103,9 @@ def _fetch_schema(
 
         assert len(primary_key) <= 1, "Cannot have more than 1 primary key."
         primary_key = primary_key[0] if len(primary_key) == 1 else ""
-        assert (
-            foreign_keys != columns
-        ), "Foreign keys and columns cannot be the same."
+        assert foreign_keys != columns, (
+            "Foreign keys and columns cannot be the same."
+        )
 
         table_dict: TableDict = {
             "name": table,
@@ -131,8 +131,8 @@ def _fetch_schema(
         FROM pg_constraint c join pg_attribute a on c.confrelid=a.attrelid and a.attnum = ANY(confkey)
         WHERE c.confrelid = (select oid from pg_class where relname = '{table}')
         AND c.confrelid != c.conrelid;
-        """
-        cursor.execute(reference_query)  # type: ignore
+        """  # noqa: E501
+        cursor.execute(reference_query)  # pyright: ignore[reportArgumentType]
         rows = cursor.fetchall()
         for row in rows:
             reference_dicts.append(row)  # noqa: PERF402
@@ -153,29 +153,27 @@ class PostgresConnector(DBConnector):
             credentials: valid connection string to the PostgreSQL database.
                          e.g. postgresql://<username>:<password>@<host>:<port>/<db_name>
 
-        """
+        """  # noqa: E501
         self.credentials = credentials
 
     def __enter__(self) -> Self:
         """Enter context manager for PostgresConnector by opening a connection and creating a cursor.
 
-        Returns
+        Returns:
         -------
            instance of PostgresConnector
 
-        """
+        """  # noqa: E501
         self.connection = psycopg.connect(
             self.credentials,
-            row_factory=dict_row,  # type: ignore
+            row_factory=dict_row,  # pyright: ignore[reportArgumentType]
         )
         self.cursor = self.connection.cursor()
         self.schema = self.get_schema()
         return self
 
-    def __exit__(
-        self, exception: object, value: object, traceback: object
-    ) -> None:
-        """Exit context manager by closing connection, and rolling back on an exception."""
+    def __exit__(self, exception: object, value: object, traceback: object) -> None:
+        """Exit context manager by closing connection, and rolling back on an exception."""  # noqa: E501
         if exception:
             self.connection.rollback()
         else:

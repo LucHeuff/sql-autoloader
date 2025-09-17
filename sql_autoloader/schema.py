@@ -61,7 +61,7 @@ class Table(BaseModel):
         ----
                     columns: list of columns of interest
 
-        Returns
+        Returns:
         -------
                     columns that the list and this table have in common.
 
@@ -76,7 +76,7 @@ class Table(BaseModel):
             columns: list of columns that may appear in this table,
                      which are allowed to have a prefix.
 
-        Returns
+        Returns:
         -------
            list of tuples of prefixed columns in format (prefixed, original)
 
@@ -124,7 +124,7 @@ class Table(BaseModel):
         ----
             column: name of column to check
 
-        Returns
+        Returns:
         -------
            boolean indicating if the column exists for this table.
 
@@ -275,11 +275,11 @@ class Schema:
         ----
             table_name: of the desired table
 
-        Returns
+        Returns:
         -------
            corresponding Table object
 
-        Raises
+        Raises:
         ------
             TableDoesNotExistError: if table does not exist in schema.
 
@@ -296,11 +296,11 @@ class Schema:
         ----
             column_name: bare column name, or with table prefix if ambiguous
 
-        Returns
+        Returns:
         -------
            name of the table that belongs to this column.
 
-        Raises
+        Raises:
         ------
             NoSuchColumnForTableError: if prefixed table doesn't have this column.
             ColumnIsAmbiguousError: if the column name appears on multiple columns.
@@ -337,7 +337,7 @@ class Schema:
             table_name: name of table to get mapping for
             columns: columns that might need to be remapped
 
-        Returns
+        Returns:
         -------
             mapping of prefixed columns to bare column names.
 
@@ -358,7 +358,7 @@ class Schema:
         ----
             columns: list of columns to be loaded.
 
-        Returns
+        Returns:
         -------
            list of tables to load.
 
@@ -400,7 +400,7 @@ class Schema:
             table: under consideration
             columns: list of columns that are to be inserted or retrieved with
 
-        Raises
+        Raises:
         ------
             EmptyColumnListError: when list is empty
             ColumnsDoNotExistError: when none of the columns exist in the table.
@@ -431,7 +431,7 @@ class Schema:
         ----
             table_name: name of the desired table
 
-        Returns
+        Returns:
         -------
            list of columns that are not primary or foreign keys
 
@@ -451,7 +451,7 @@ class Schema:
             columns: list of columns to include in the compare query
             where: (Optional) WHERE clause to filter comparison results by
 
-        Returns
+        Returns:
         -------
             valid compare query
 
@@ -578,7 +578,7 @@ class Schema:
         ----
             columns: that are to be inserted
 
-        Returns
+        Returns:
         -------
             insert_and_retrieve, insert
             with:
@@ -657,7 +657,7 @@ class Schema:
             table_name: name of table to be inserted into
             columns: list of columns in dataframe
 
-        Returns
+        Returns:
         -------
             list of columns that table and data have in common.
 
@@ -680,12 +680,12 @@ class Schema:
             alias: of the primary key of the table
             columns: list of columns in dataframe
 
-        Raises
+        Raises:
         ------
             NoPrimaryKeyError: when the table does not have a primary key
             AliasDoesNotExistError: when the alias does not appear in the schema
 
-        Returns
+        Returns:
         -------
             list of columns that table and data have in common.
 

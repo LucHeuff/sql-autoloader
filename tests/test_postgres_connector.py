@@ -1,4 +1,5 @@
 import polars as pl
+import pytest
 from polars.testing import assert_frame_equal
 
 from sql_autoloader.postgres import (
@@ -35,6 +36,7 @@ def test_get_retrieve_query() -> None:
 # NOTE: This will fail when Postgres is not installed on the current machine.
 
 
+@pytest.mark.skip(reason="No postgres server available on WSL.")
 def test_basic_integration() -> None:
     """Basic test of whether PostgreSQLConnector works in integration setting."""
     schema = """

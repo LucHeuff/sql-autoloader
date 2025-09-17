@@ -475,6 +475,7 @@ def test_schema() -> None:
     ]
 
     load_instructions = schema.get_load_instructions(instruction_columns)
+    assert isinstance(repr(load_instructions), str)
     assert load_instructions.insert_and_retrieve == insert_and_retrieve_dicts
     assert load_instructions.insert == insert_dicts
 

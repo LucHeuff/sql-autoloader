@@ -26,7 +26,7 @@ def preprocess(data: pl.DataFrame, columns: dict[str, str] | None) -> pl.DataFra
         data: pl.DataFrame
         columns: (Optional) dictionary of {old_name: new_name}
 
-    Returns
+    Returns:
     -------
         renamed pl.DataFrame
 
@@ -43,7 +43,7 @@ def postprocess(data: pl.DataFrame, columns: dict[str, str] | None) -> pl.DataFr
         data: pl.DataFrame
         columns: (Optional) dictionary of {old_name: new_name}
 
-    Returns
+    Returns:
     -------
         original pl.DataFrame
 
@@ -102,7 +102,7 @@ class DBConnector(ABC):
             table: to insert into
             columns: to insert values into
 
-        Returns
+        Returns:
         -------
             Valid insert query for this Connector
 
@@ -122,7 +122,7 @@ class DBConnector(ABC):
             alias: for the primary key
             columns: to read values from
 
-        Returns
+        Returns:
         -------
             Valid retrieve query for this Connector
 
@@ -219,7 +219,7 @@ class DBConnector(ABC):
                      dropped after joining.
             allow_duplication: if rows are allowed to be duplicated when merging ids
 
-        Returns
+        Returns:
         -------
             data with ids from database added, or replacing original columns
 
@@ -271,7 +271,7 @@ class DBConnector(ABC):
                      dropped after joining.
             allow_duplication: if rows are allowed to be duplicated when merging ids
 
-        Returns
+        Returns:
         -------
             data with ids from database added, or replacing original columns
 
@@ -377,7 +377,7 @@ class DBConnector(ABC):
                    If False, only checks if rows from data appear in rows from query.
                    Setting exact=False will also remove rows with missings from data.
 
-        Returns
+        Returns:
         -------
             pl.DataFrame including foreign keys
 

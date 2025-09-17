@@ -65,7 +65,7 @@ def get_rows(df: pl.DataFrame, columns: list[str]) -> list[dict]:
         columns: list of columns to restrict the data to.
 
 
-    Returns
+    Returns:
     -------
         list of dictionaries limited to columns in `columns`
 
@@ -84,7 +84,7 @@ def match_dtypes(df: pl.DataFrame, db_rows: list[dict]) -> pl.DataFrame:
         df: pl.DataFrame to match dtypes with
         db_rows: rows to be converted to matching dataframe
 
-    Returns
+    Returns:
     -------
        pl.DataFrame from db_rows with matching dtypes
 
@@ -120,7 +120,7 @@ def merge_ids(
         allow_duplication: (Optional) whether merging ids is allowed to duplicate rows.
                            Default: false
 
-    Raises
+    Raises:
     ------
         MissingKeysAfterMergeError: if as a result of merging any *_id columns now contain misings.
 

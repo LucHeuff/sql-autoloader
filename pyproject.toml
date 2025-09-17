@@ -12,6 +12,7 @@ dependencies = [
     "networkx>=3.4.2",
     "polars>=1.19.0",
     "pydantic>=2.10.5",
+    "pytest-cov>=7.0.0",
 ]
 
 [project.optional-dependencies]

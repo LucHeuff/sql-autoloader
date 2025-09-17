@@ -2,6 +2,7 @@
 __pycache__
 .hypothesis
 dev.py
+.coverage
 
 # other other dev things
 .env
