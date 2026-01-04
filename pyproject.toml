@@ -4,24 +4,20 @@ version = "0.1.3"
 description = "Add your description here"
 readme = "README.md"
 authors = [
-    { name = "Luc Heuff", email = "10941592+LucHeuff@users.noreply.github.com" }
+  { name = "Luc Heuff", email = "10941592+LucHeuff@users.noreply.github.com" }
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "more-itertools>=10.5.0",
-    "networkx>=3.4.2",
-    "polars>=1.19.0",
-    "pydantic>=2.10.5",
-    "pytest-cov>=7.0.0",
+  "more-itertools>=10.5.0",
+  "networkx>=3.4.2",
+  "polars>=1.19.0",
+  "pydantic>=2.10.5",
 ]
 
 [project.optional-dependencies]
 postgres = [
-    "psycopg>=3.2.3",
+  "psycopg>=3.2.3",
 ]
-
-[tool.ruff]
-extend = "~/ruff.toml"
 
 [build-system]
 requires = ["hatchling"]
@@ -29,7 +25,14 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "basedpyright>=1.23.2",
-    "hypothesis[numpy]>=6.123.17",
-    "pytest>=8.3.4",
+  "hypothesis[numpy]>=6.123.17",
+  "psycopg>=3.2.5",
+  "pytest>=8.3.4",
+  "pytest-cov>=7.0.0",
 ]
+
+[tool.ruff]
+extend = "~/ruff.toml"
+
+[tool.coverage.run]
+omit = ["*/.local/*"]
