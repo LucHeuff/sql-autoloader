@@ -132,7 +132,7 @@ def _fetch_schema(
         WHERE c.confrelid = (select oid from pg_class where relname = '{table}')
         AND c.confrelid != c.conrelid;
         """  # noqa: E501
-        cursor.execute(reference_query)  # pyright: ignore[reportArgumentType]
+        cursor.execute(reference_query)  # ty: ignore[invalid-argument-type]
         rows = cursor.fetchall()
         for row in rows:
             reference_dicts.append(row)  # noqa: PERF402
@@ -166,13 +166,13 @@ class PostgresConnector(DBConnector):
         """  # noqa: E501
         self.connection = psycopg.connect(
             self.credentials,
-            row_factory=dict_row,  # pyright: ignore[reportArgumentType]
+            row_factory=dict_row,  # ty:ignore[invalid-argument-type]
         )
         self.cursor = self.connection.cursor()
         self.schema = self.get_schema()
         return self
 
-    def __exit__(self, exception: object, value: object, traceback: object) -> None:
+    def __exit__(self, exception: object, value: object, traceback: object) -> None:  # ty:ignore[invalid-method-override]
         """Exit context manager by closing connection, and rolling back on an exception."""  # noqa: E501
         if exception:
             self.connection.rollback()

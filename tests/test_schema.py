@@ -95,7 +95,7 @@ def test_basic_table() -> None:
 
     prefix_column_map = {f"test.{col}": col for col in columns + foreign_keys}
 
-    table = Table(**table_dict)
+    table = Table(**table_dict)  # ty:ignore[invalid-argument-type]
     # Testing properties
     assert table.columns_and_foreign_keys == foreign_keys + columns
     assert table.has_primary_key
@@ -126,7 +126,7 @@ def test_basic_linking_table() -> None:
         "columns": columns,
     }
 
-    table = Table(**table_dict)
+    table = Table(**table_dict)  # ty:ignore[invalid-argument-type]
     assert table.is_linking
 
 
@@ -134,7 +134,7 @@ def test_empty_table() -> None:
     """Test if providing an empty table to Table results in the correct error."""
     empty = {"name": "", "columns": []}
     with pytest.raises(InvalidTableError):
-        Table(**empty)
+        Table(**empty)  # ty:ignore[invalid-argument-type]
 
 
 @given(strategy=table_strategy())

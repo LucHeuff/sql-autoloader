@@ -47,11 +47,11 @@ def has_nulls_strategy(draw: st.DrawFn) -> HasNullsStrategy:
         d_types = draw(
             st.lists(dtypes(), min_size=len(columns), max_size=len(columns))
         )
-        df = pl.DataFrame({col: None for col in columns}).cast(
+        df = pl.DataFrame(dict.fromkeys(columns)).cast(
             dict(zip(columns, d_types, strict=True))
         )
 
-    return HasNullsStrategy(df, has_nulls)
+    return HasNullsStrategy(df, has_nulls)  # ty: ignore[invalid-argument-type]
 
 
 def test_basic_has_nulls() -> None:
@@ -92,7 +92,7 @@ def rows_generator(draw: st.DrawFn, min_rows: int = 1) -> GeneratedRows:
         draw: hypothesis draw function
         min_rows: minimum number of rows
 
-    Returns
+    Returns:
     -------
         GeneratedRows
 
@@ -210,7 +210,7 @@ def get_rows_strategy(draw: st.DrawFn) -> GetRowsStrategy:
 def test_basic_get_rows() -> None:
     """Basic test of get_rows()."""
     columns = ["a", "b", "c"]
-    rows = {col: 1 for col in columns}
+    rows = dict.fromkeys(columns, 1)
     df = pl.DataFrame(rows)
     assert get_rows(df, columns) == [rows]
     # testing if it also works when subselecting some data
@@ -247,12 +247,12 @@ def match_dtypes_strategy(draw: st.DrawFn) -> MatchDTypesStrategy:
     """Generate a dataframe and rows to test match_dtypes()."""
     match_error = draw(st.booleans())
     df = draw(dataframes(min_size=1, allow_null=False, allowed_dtypes=[pl.Float32]))
-    match_columns = draw(subselection(df.columns))
+    match_columns = draw(subselection(df.columns))  # ty:ignore[unresolved-attribute]
     if match_error:
         rows = [{col: col for col in match_columns}]
     else:
         rows = [{col: n for (n, col) in enumerate(match_columns)}]
-    return MatchDTypesStrategy(df, rows, match_columns, match_error)
+    return MatchDTypesStrategy(df, rows, match_columns, match_error)  # ty: ignore[invalid-argument-type]
 
 
 def test_basic_match_dtypes() -> None:

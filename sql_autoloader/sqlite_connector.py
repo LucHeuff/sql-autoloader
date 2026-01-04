@@ -15,7 +15,7 @@ def _get_insert_query(table: str, columns: list[str]) -> str:
         table: to insert into
         columns: to insert values into
 
-    Returns
+    Returns:
     -------
         valid insert query
 
@@ -35,7 +35,7 @@ def _get_retrieve_query(table: str, key: str, alias: str, columns: list[str]) ->
         alias: for the primary key
         columns: to read values from
 
-    Returns
+    Returns:
     -------
         valid retrieve query
 
@@ -52,7 +52,7 @@ def _dict_row(cursor: sqlite3.Cursor, row: tuple) -> dict:
         cursor: SQLite cursor
         row: data row output
 
-    Returns
+    Returns:
     -------
         data in dictionary format
 
@@ -158,7 +158,7 @@ class SQLiteConnector(DBConnector):
 
         This will open a connection and create a cursor.
 
-        Returns
+        Returns:
         -------
             instance of SQLiteConnector
 
@@ -171,13 +171,13 @@ class SQLiteConnector(DBConnector):
         self.connection = sqlite3.connect(
             self.credentials, detect_types=detect_types
         )
-        self.connection.row_factory = _dict_row
+        self.connection.row_factory = _dict_row  # ty: ignore[invalid-assignment]
         self.connection.autocommit = False
         self.cursor = self.connection.cursor()
         self.schema = self.get_schema()
         return self
 
-    def __exit__(self, exception: object, value: object, traceback: object) -> None:
+    def __exit__(self, exception: object, value: object, traceback: object) -> None:  # ty:ignore[invalid-method-override]
         """Exit context manager by closing connection, rolling back on exception."""
         if exception:
             self.connection.rollback()
@@ -196,7 +196,7 @@ class SQLiteConnector(DBConnector):
                     table: to insert into
                     columns: to insert values into
 
-        Returns
+        Returns:
         -------
                     valid insert query
 
@@ -215,7 +215,7 @@ class SQLiteConnector(DBConnector):
             alias: for the primary key
             columns: to read values from
 
-        Returns
+        Returns:
         -------
             valid insert query
 

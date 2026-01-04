@@ -1,6 +1,5 @@
 from collections import Counter
 from dataclasses import dataclass
-from re import S
 from tempfile import NamedTemporaryFile
 
 import hypothesis.strategies as st
