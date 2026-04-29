@@ -168,6 +168,10 @@ class Reference(BaseModel):
             f"ON {self.from_table}.{self.from_key} = {self.to_table}.{self.to_key}"
         )
 
+    def __hash__(self) -> int:
+        """Making Reference hashable."""
+        return hash(f"{self.from_table}{self.from_key}{self.to_table}{self.to_key}")
+
 
 class TableDict(TypedDict):
     """Type indicator for GetTablesFunction output."""
