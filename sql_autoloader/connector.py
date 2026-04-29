@@ -191,7 +191,7 @@ class DBConnector(ABC):
         self.cursor.executemany(query, get_rows(data, common_columns))
 
         # postprocessing because processing happens in place.
-        data = postprocess(data, columns)
+        postprocess(data, columns)
 
     def retrieve_ids(
         self,
@@ -239,7 +239,9 @@ class DBConnector(ABC):
         self.cursor.execute(query)
         db_fetch = self.cursor.fetchall()
 
-        data = merge_ids(data, db_fetch, alias, allow_duplication=allow_duplication)
+        data = merge_ids(
+            data, db_fetch, alias, table, allow_duplication=allow_duplication
+        )
 
         if replace:
             # Use table schema to determine which non_id columns can be dropped.
@@ -335,7 +337,7 @@ class DBConnector(ABC):
 
         compare(data, db_rows, exact=exact)
 
-        data = postprocess(data, columns)
+        postprocess(data, columns)
 
     def load(
         self,

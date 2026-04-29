@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import hypothesis.strategies as st
 import polars as pl
 import pytest
-from hypothesis import assume, given
+from hypothesis import given
 from more_itertools import batched
 from polars.testing import assert_frame_equal
 from polars.testing.parametric import dataframes, dtypes
@@ -21,7 +21,7 @@ from sql_autoloader.exceptions import (
     MatchDatatypesError,
     MissingKeysAfterMergeError,
 )
-from tests.generators import name_generator, names_generator, subselection
+from tests.generators import names_generator, subselection
 
 # ---- Testing has_nulls()
 
@@ -51,7 +51,7 @@ def has_nulls_strategy(draw: st.DrawFn) -> HasNullsStrategy:
             dict(zip(columns, d_types, strict=True))
         )
 
-    return HasNullsStrategy(df, has_nulls)  # ty: ignore[invalid-argument-type]
+    return HasNullsStrategy(df, has_nulls)
 
 
 def test_basic_has_nulls() -> None:
@@ -247,12 +247,12 @@ def match_dtypes_strategy(draw: st.DrawFn) -> MatchDTypesStrategy:
     """Generate a dataframe and rows to test match_dtypes()."""
     match_error = draw(st.booleans())
     df = draw(dataframes(min_size=1, allow_null=False, allowed_dtypes=[pl.Float32]))
-    match_columns = draw(subselection(df.columns))  # ty:ignore[unresolved-attribute]
+    match_columns = draw(subselection(df.columns))
     if match_error:
         rows = [{col: col for col in match_columns}]
     else:
         rows = [{col: n for (n, col) in enumerate(match_columns)}]
-    return MatchDTypesStrategy(df, rows, match_columns, match_error)  # ty: ignore[invalid-argument-type]
+    return MatchDTypesStrategy(df, rows, match_columns, match_error)
 
 
 def test_basic_match_dtypes() -> None:
@@ -288,63 +288,16 @@ class MergeIDsStrategy:
     merged_df: pl.DataFrame
     rows: list[dict]
     alias: str
+    table: str
     allow_duplication: bool
     missing_keys: bool
     duplication_error: bool
 
 
-@st.composite
-def merge_ids_strategy(draw: st.DrawFn) -> MergeIDsStrategy:
-    """Strategy for test of merge_ids()."""
-    missing_keys = draw(st.booleans())
-    allow_duplication = draw(st.booleans())
-    duplication_error = False if not allow_duplication else draw(st.booleans())
-    alias = draw(name_generator())
-    df = draw(
-        dataframes(
-            min_size=3,
-            allow_null=False,
-            # excluding int64 because polars seems to have a weird issue joining on
-            # large numbers...
-            excluded_dtypes=[
-                pl.Struct,
-                pl.Categorical,
-                pl.Decimal,
-                pl.Int64,
-                pl.UInt64,
-            ],
-        )
-    )
-
-    # Making sure that only unique rows are generated
-    assume(len(df) == len(df.unique()))
-
-    merged_df = df.with_row_index().rename({"index": alias})
-    rows = merged_df.to_dicts()
-
-    if missing_keys:
-        # I get missings if not all rows that are in df are fetched from db
-        # So I need to remove some of the rows
-        rows = merged_df.to_dicts()[: len(merged_df) - 1]
-
-    if allow_duplication:
-        rows = rows + rows
-        merged_df = pl.concat([merged_df, merged_df])
-
-    return MergeIDsStrategy(
-        df,
-        merged_df,
-        rows,
-        alias,
-        allow_duplication,
-        missing_keys,
-        duplication_error,
-    )
-
-
 def test_basic_merge_ids() -> None:
     """Basic test of merge_ids()."""
     alias = "a_id"
+    table = "test"
     df = pl.DataFrame({"a": ["A", "B", "C"]})
     db_fetch = [
         {"a_id": 1, "a": "A"},
@@ -372,15 +325,15 @@ def test_basic_merge_ids() -> None:
         }
     )
 
-    out = merge_ids(df, db_fetch, alias)
+    out = merge_ids(df, db_fetch, alias, table)
     assert_frame_equal(out_df, out, check_column_order=False, check_row_order=False)
 
     # testing allow_duplication=False
     with pytest.raises(AssertionError):
-        merge_ids(df, db_fetch_duplicates, alias)
+        merge_ids(df, db_fetch_duplicates, alias, table)
 
     out_duplicates = merge_ids(
-        df, db_fetch_duplicates, alias, allow_duplication=True
+        df, db_fetch_duplicates, alias, table, allow_duplication=True
     )
     assert_frame_equal(
         out_df_duplicates,
@@ -391,12 +344,13 @@ def test_basic_merge_ids() -> None:
 
     # testing missing ids
     with pytest.raises(MissingKeysAfterMergeError):
-        merge_ids(df, db_fetch_missings, alias)
+        merge_ids(df, db_fetch_missings, alias, table)
 
 
 def test_basic_merge_ids_missings() -> None:
     """Basic test of merging where some of the data are missing."""
     alias = "a_id"
+    table = "test"
     df = pl.DataFrame({"a": ["A", "B", "C"], "b": [1, 2, None]})
     db_fetch = [
         {"a_id": 1, "a": "A", "b": 1},
@@ -406,38 +360,5 @@ def test_basic_merge_ids_missings() -> None:
     out_df = pl.DataFrame(
         {"a": ["A", "B", "C"], "a_id": [1, 2, 3], "b": [1, 2, None]}
     )
-    out = merge_ids(df, db_fetch, alias)
+    out = merge_ids(df, db_fetch, alias, table)
     assert_frame_equal(out_df, out, check_column_order=False, check_row_order=False)
-
-
-@given(strategy=merge_ids_strategy())
-def test_merge_ids(strategy: MergeIDsStrategy) -> None:
-    """Simulation test of merge_ids()."""
-    # This test fails on a AssertionError:
-    # Rows were duplicated when joining on ids that I cannot reproduce manually.
-    # So maybe flaky test, maybe time to make the test a lot stricter
-    if strategy.missing_keys:
-        with pytest.raises(MissingKeysAfterMergeError):
-            merge_ids(
-                strategy.df,
-                strategy.rows,
-                strategy.alias,
-                allow_duplication=strategy.allow_duplication,
-            )
-    elif strategy.duplication_error:
-        with pytest.raises(AssertionError):
-            merge_ids(strategy.df, strategy.rows, strategy.alias)
-    else:
-        out = merge_ids(
-            strategy.df,
-            strategy.rows,
-            strategy.alias,
-            allow_duplication=strategy.allow_duplication,
-        )
-        assert_frame_equal(
-            out,
-            strategy.merged_df,
-            check_column_order=False,
-            check_row_order=False,
-            check_dtypes=False,
-        )

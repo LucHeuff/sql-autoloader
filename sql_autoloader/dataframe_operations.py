@@ -47,7 +47,7 @@ def compare(df: pl.DataFrame, db_rows: list[dict], *, exact: bool = True) -> Non
 
     # check if all rows in data appear in the database
     if not all(rows_in_db):
-        db_data = match_dtypes(df, db_rows)
+        match_dtypes(df, db_rows)
         # checking which rows do not appear in dataframe
         missing_rows = df.with_row_index().filter(~pl.Series(rows_in_db))
         message = (
@@ -97,7 +97,7 @@ def match_dtypes(df: pl.DataFrame, db_rows: list[dict]) -> pl.DataFrame:
     }
 
     try:
-        return pl.DataFrame(db_rows).cast(schema)  # pyright: ignore[reportArgumentType]
+        return pl.DataFrame(db_rows).cast(schema)  # ty:ignore[invalid-argument-type]
     except InvalidOperationError as e:
         message = f"Matching dtypes failed with the following error:\n{e}"
         raise MatchDatatypesError(message) from e
@@ -107,6 +107,7 @@ def merge_ids(
     df: pl.DataFrame,
     db_fetch: list[dict],
     alias: str,
+    table: str,
     *,
     allow_duplication: bool = False,
 ) -> pl.DataFrame:
@@ -117,6 +118,7 @@ def merge_ids(
         df: pl.DataFrame where ids are to be merged into
         db_fetch: output from cursor.fetchall()
         alias: under which ids were fetched and which should not contain missings
+        table: name of the table being acted on
         allow_duplication: (Optional) whether merging ids is allowed to duplicate rows.
                            Default: false
 
@@ -135,7 +137,7 @@ def merge_ids(
     # taking the columns the two datasets have in common as join columns
     on_columns = list(set(df.columns) & set(db_data.columns))
 
-    df = df.join(db_data, on=on_columns, how="left", join_nulls=True)
+    df = df.join(db_data, on=on_columns, how="left", nulls_equal=True)
 
     # sanity checks: dataset should not shrink and rows should not be duplicated
     assert len(df) >= orig_len, "Rows were lost when joining on ids."
@@ -150,7 +152,7 @@ def merge_ids(
     if has_nulls(df.select(alias)):
         rows_with_missings = df.filter(pl.any_horizontal(alias).is_null())
         message = (
-            "Some id's were returned as NA:\n"
+            f"When reading from {table} Some id's were returned as NA:\n"
             + str(rows_with_missings)
             + "\nCheck if the uniqueness assumptions you made in your database schema are correct, or whether your made a mistake in your schema definitions somewhere."  # noqa: E501
         )
