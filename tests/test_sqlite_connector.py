@@ -6,7 +6,7 @@ import hypothesis.strategies as st
 import networkx as nx
 import polars as pl
 import pytest
-from hypothesis import given
+from hypothesis import assume, given
 from more_itertools import batched
 from polars.testing import assert_frame_equal
 
@@ -293,6 +293,7 @@ class IntegrationStrategy:
     schema: str
     df: pl.DataFrame
     no_isolates: bool
+    tables: list[str]
 
 
 @st.composite
@@ -300,6 +301,10 @@ def integration_strategy(draw: st.DrawFn) -> IntegrationStrategy:
     """Simulate input for testing SQLiteConnetor."""
     no_isolates = draw(st.booleans())
     table_names = draw(names_generator(min_size=3, max_size=7))
+
+    # some names cause issues in SQLite
+    not_allowed = ["null", "table", "set", "if", "then", "else", "not", "exists"]
+    assume(all(tbl_name.lower() not in not_allowed for tbl_name in table_names))
     # Generating a random DAG
     graph = draw(dag_generator(table_names, no_isolates=no_isolates))
 
@@ -371,7 +376,7 @@ def integration_strategy(draw: st.DrawFn) -> IntegrationStrategy:
 
     df = pl.DataFrame(rows)
 
-    return IntegrationStrategy(schema, df, no_isolates)
+    return IntegrationStrategy(schema, df, no_isolates, table_names)
 
 
 # Note: this test probably misses more edge cases than you might think

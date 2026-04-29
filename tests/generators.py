@@ -39,7 +39,7 @@ def names_generator(
         min_size: miniumum size of names
         max_size: maximum size of names
 
-    Returns
+    Returns:
     -------
        list of random names.
 
@@ -68,7 +68,7 @@ def subselection(
         max_size: (Optional) maximum number of items to draw.
                   If left empty, draws at most n-1 items.
 
-    Returns
+    Returns:
     -------
        list of unique random items subsampled from input items.
 
@@ -100,7 +100,7 @@ def dag_generator(
         no_isolates: (Optional) whether isolated nodes are allowable.
                      Defaults to False.
 
-    Returns
+    Returns:
     -------
        Random nx.DiGraph that is a DAG.
 

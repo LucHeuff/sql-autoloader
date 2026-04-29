@@ -3,7 +3,6 @@ from dataclasses import dataclass
 import hypothesis.strategies as st
 import polars as pl
 from hypothesis import given
-from polars.testing import assert_frame_equal
 from polars.testing.parametric import dataframes
 
 from sql_autoloader.connector import postprocess, preprocess
