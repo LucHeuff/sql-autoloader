@@ -25,6 +25,23 @@ def _get_insert_query(table: str, columns: list[str]) -> str:
     return f"INSERT OR IGNORE INTO {table} ({columns_section}) VALUES ({values_section})"  # noqa: E501
 
 
+def _get_check_insert_query(table: str, columns: list[str]) -> str:
+    """Get a query to check inserted data appropriate for a SQLite database.
+
+    Args:
+    ----
+        table: to select from
+        columns: to read values from
+
+    Returns:
+    -------
+        valid check insert query
+
+    """
+    columns_section = ", ".join(columns)
+    return f"SELECT DISTINCT {columns_section} FROM {table}"
+
+
 def _get_retrieve_query(table: str, key: str, alias: str, columns: list[str]) -> str:
     """Get a retrieve query appropriate for a SQLite database.
 
@@ -202,6 +219,21 @@ class SQLiteConnector(DBConnector):
 
         """
         return _get_insert_query(table, columns)
+
+    def get_check_insert_query(self, table: str, columns: list[str]) -> str:
+        """Get a query to check inserted data appropriate for a SQLite database.
+
+        Args:
+        ----
+            table: to select from
+            columns: to read values from
+
+        Returns:
+        -------
+            valid check insert query
+
+        """
+        return _get_check_insert_query(table, columns)
 
     def get_retrieve_query(
         self, table: str, key: str, alias: str, columns: list[str]

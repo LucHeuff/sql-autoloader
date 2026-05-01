@@ -1,5 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
+from textwrap import dedent
 from typing import Protocol, Self
 
 import polars as pl
@@ -9,6 +10,10 @@ from sql_autoloader.dataframe_operations import (
     get_rows,
     has_nulls,
     merge_ids,
+)
+from sql_autoloader.exceptions import (
+    CompareMissingRowsError,
+    InsertingDataFailedError,
 )
 from sql_autoloader.schema import ReferenceDict, Schema, TableDict
 
@@ -110,6 +115,22 @@ class DBConnector(ABC):
         ...
 
     @abstractmethod
+    def get_check_insert_query(self, table: str, columns: list[str]) -> str:
+        """Get a query to check if data was correctly inserted.
+
+        Args:
+        ----
+            table: to insert into
+            columns: to insert values into
+
+        Returns:
+        -------
+            Valid check insert query for this Connector
+
+
+        """
+
+    @abstractmethod
     def get_retrieve_query(
         self, table: str, key: str, alias: str, columns: list[str]
     ) -> str:
@@ -189,6 +210,19 @@ class DBConnector(ABC):
 
         # Executing query
         self.cursor.executemany(query, get_rows(data, common_columns))
+
+        # Checking whether the appropriate data were loaded
+        check_query = self.get_check_insert_query(table, common_columns)
+        self.cursor.execute(check_query)
+        db_fetch = self.cursor.fetchall()
+
+        try:
+            # Data contains all the columns,
+            # but I only want to select the relevant columns.
+            compare(data.select(common_columns).unique(), db_fetch, exact=False)
+        except CompareMissingRowsError as e:
+            msg = f"Encountered an error upon inserting data into table '{table}':\n\t{e!s}\nThis usually happens due to a uniqueness constraint not allowing new data to be inserted.\nEither clear the relevant tables, or reset the database.\nIf you want to update the data in the current table yourself, then manually execute an UPDATE query."  # noqa: E501
+            raise InsertingDataFailedError(msg) from e
 
         # postprocessing because processing happens in place.
         postprocess(data, columns)

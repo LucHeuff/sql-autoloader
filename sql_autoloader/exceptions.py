@@ -12,6 +12,10 @@ class MatchDatatypesError(SQLAutoloaderError):
     """Raised when matching datatypes fails."""
 
 
+class InsertingDataFailedError(SQLAutoloaderError):
+    """Raised when an attempt to insert data failed."""
+
+
 class CompareMissingRowsError(SQLAutoloaderError):
     """Raised during comparison when rows from data do not exist in the database."""
 

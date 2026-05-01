@@ -6,6 +6,7 @@ from sql_autoloader.postgres import (
     PostgresConnector,
 )
 from sql_autoloader.postgres.postgres_connector import (
+    _get_check_insert_query,
     _get_insert_query,
     _get_retrieve_query,
 )
@@ -19,6 +20,14 @@ def test_get_insert_query() -> None:
     columns = ["kleur", "zadel", "wielen"]
     query = "INSERT INTO fiets (kleur, zadel, wielen) VALUES (%(kleur)s, %(zadel)s, %(wielen)s) ON CONFLICT DO NOTHING"  # noqa: E501
     assert _get_insert_query(table, columns) == query
+
+
+def test_get_check_insert_query() -> None:
+    """Test whether _get_check_insert_query() works as intended."""
+    table = "fiets"
+    columns = ["kleur", "zadel", "wielen"]
+    query = "SELECT DISTINCT kleur, zadel, wielen FROM fiets"
+    assert _get_check_insert_query(table, columns) == query
 
 
 def test_get_retrieve_query() -> None:
